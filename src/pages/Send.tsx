@@ -1,24 +1,65 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clipboard, Check, SkipForward, Undo2, Pause, ArrowLeft, ArrowRight, UserRound, AlertCircle } from 'lucide-react';
+import {
+  Clipboard,
+  Check,
+  SkipForward,
+  Undo2,
+  Pause,
+  ArrowLeft,
+  ArrowRight,
+  UserRound,
+  AlertCircle,
+  RotateCcw,
+  Filter,
+  SendHorizontal,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/store/app-store';
 import { renderMessage, generateId } from '@/lib/sms-utils';
-import { getActiveSession, saveSession } from '@/lib/persistence';
-import type { SendSession, SendSessionRecipient } from '@/types';
+import { deleteSession, getActiveSession, saveSession } from '@/lib/persistence';
+import { isValidAUMobile, sendSMS, toE164AU } from '@/services/httpsms';
+import type { SendLogEntry, SendSession, SendSessionRecipient } from '@/types';
+
+interface LastActionState {
+  recipientIndex: number;
+  previousRecipient: SendSessionRecipient;
+  previousCurrentIndex: number;
+  previousStatus: SendSession['status'];
+}
+
+interface SendState {
+  status: 'idle' | 'sending' | 'sent';
+  recipientId: string | null;
+}
+
+type QueueFilter = 'all' | 'pending' | 'skipped';
+
+const HTTPSMS_API_KEY_STORAGE = 'httpsms_api_key';
+const HTTPSMS_FROM_NUMBER_STORAGE = 'httpsms_from_number';
 
 export default function SendPage() {
   const navigate = useNavigate();
   const { recipients, messageTemplate, settings, activeSession, setActiveSession } = useAppStore();
+  const { toast } = useToast();
   const [copiedField, setCopiedField] = useState<'number' | 'message' | null>(null);
   const [showSkipInput, setShowSkipInput] = useState(false);
   const [skipReason, setSkipReason] = useState('');
   const [note, setNote] = useState('');
-  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>('all');
   const [fallbackText, setFallbackText] = useState<string | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
+  const [showSessionSummary, setShowSessionSummary] = useState(false);
+  const [lastAction, setLastAction] = useState<LastActionState | null>(null);
+  const [sendState, setSendState] = useState<SendState>({ status: 'idle', recipientId: null });
+  const [sendLog, setSendLog] = useState<SendLogEntry[]>([]);
+  const [showSendLog, setShowSendLog] = useState(false);
   const instructionsDismissed = localStorage.getItem('hughs-instructions-dismissed') === 'true';
   const [showInstructions, setShowInstructions] = useState(!instructionsDismissed);
 
@@ -60,6 +101,7 @@ export default function SendPage() {
         sentAt: null,
         skipReason: null,
         notes: '',
+        patientPhoneInput: r.mobileDisplay,
       }));
 
       const session: SendSession = {
@@ -118,61 +160,44 @@ export default function SendPage() {
     setNote('');
   };
 
-  const markCurrentPatientSent = useCallback(async () => {
-    if (!session) return;
+  const updateCurrentPatientState = useCallback(
+    async (nextStatus: 'sent' | 'skipped') => {
+      if (!session) return;
 
-    const currentRecipient = session.recipients[session.currentIndex];
-    if (!currentRecipient) return;
+      const currentRecipient = session.recipients[session.currentIndex];
+      if (!currentRecipient || currentRecipient.sendStatus !== 'pending') return;
 
-    const nextRecipients = [...session.recipients];
-    const alreadySent = currentRecipient.sendStatus === 'sent';
+      const nextRecipients = [...session.recipients];
+      setLastAction({
+        recipientIndex: session.currentIndex,
+        previousRecipient: currentRecipient,
+        previousCurrentIndex: session.currentIndex,
+        previousStatus: session.status,
+      });
 
-    nextRecipients[session.currentIndex] = {
-      ...currentRecipient,
-      notes: note || currentRecipient.notes,
-      sendStatus: alreadySent ? currentRecipient.sendStatus : 'sent',
-      sentAt: currentRecipient.sentAt || new Date().toISOString(),
-      skipReason: alreadySent ? currentRecipient.skipReason : null,
-    };
+      nextRecipients[session.currentIndex] = {
+        ...currentRecipient,
+        notes: note || currentRecipient.notes,
+        sendStatus: nextStatus,
+        sentAt: nextStatus === 'sent' ? currentRecipient.sentAt || new Date().toISOString() : null,
+        skipReason: nextStatus === 'skipped' ? skipReason || currentRecipient.skipReason : null,
+      };
 
-    const nextPendingIndex = getNextPendingIndex(nextRecipients, session.currentIndex);
-    const status = nextPendingIndex === -1 ? 'completed' : session.status === 'paused' ? 'in_progress' : session.status;
+      const nextPendingIndex = getNextPendingIndex(nextRecipients, session.currentIndex);
+      const status = nextPendingIndex === -1 ? 'completed' : session.status === 'paused' ? 'in_progress' : session.status;
 
-    await updateRecipients(nextRecipients, {
-      currentIndex: nextPendingIndex === -1 ? session.currentIndex : nextPendingIndex,
-      status,
-    });
+      await updateRecipients(nextRecipients, {
+        currentIndex: nextPendingIndex === -1 ? session.currentIndex : nextPendingIndex,
+        status,
+      });
 
-    resetInlineState();
-  }, [session, note, getNextPendingIndex, updateRecipients]);
+      resetInlineState();
+    },
+    [session, note, skipReason, getNextPendingIndex, updateRecipients]
+  );
 
-  const markCurrentPatientSkipped = useCallback(async () => {
-    if (!session) return;
-
-    const currentRecipient = session.recipients[session.currentIndex];
-    if (!currentRecipient) return;
-
-    const nextRecipients = [...session.recipients];
-    const alreadySkipped = currentRecipient.sendStatus === 'skipped';
-
-    nextRecipients[session.currentIndex] = {
-      ...currentRecipient,
-      notes: note || currentRecipient.notes,
-      sendStatus: alreadySkipped ? currentRecipient.sendStatus : 'skipped',
-      skipReason: skipReason || currentRecipient.skipReason,
-      sentAt: alreadySkipped ? currentRecipient.sentAt : null,
-    };
-
-    const nextPendingIndex = getNextPendingIndex(nextRecipients, session.currentIndex);
-    const status = nextPendingIndex === -1 ? 'completed' : session.status === 'paused' ? 'in_progress' : session.status;
-
-    await updateRecipients(nextRecipients, {
-      currentIndex: nextPendingIndex === -1 ? session.currentIndex : nextPendingIndex,
-      status,
-    });
-
-    resetInlineState();
-  }, [session, note, skipReason, getNextPendingIndex, updateRecipients]);
+  const markCurrentPatientSent = useCallback(async () => updateCurrentPatientState('sent'), [updateCurrentPatientState]);
+  const markCurrentPatientSkipped = useCallback(async () => updateCurrentPatientState('skipped'), [updateCurrentPatientState]);
 
   const navigateToRecipient = useCallback(
     async (index: number) => {
@@ -194,6 +219,48 @@ export default function SendPage() {
     await navigateToRecipient(nextIndex);
   }, [session, navigateToRecipient]);
 
+  const undoLastAction = useCallback(async () => {
+    if (!session || !lastAction) return;
+
+    const nextRecipients = [...session.recipients];
+    nextRecipients[lastAction.recipientIndex] = lastAction.previousRecipient;
+
+    await updateRecipients(nextRecipients, {
+      currentIndex: lastAction.previousCurrentIndex,
+      status: lastAction.previousStatus === 'completed' ? 'in_progress' : lastAction.previousStatus,
+    });
+
+    setLastAction(null);
+    setShowSessionSummary(false);
+  }, [session, lastAction, updateRecipients]);
+
+  const restartSession = useCallback(async () => {
+    if (!session) return;
+    const confirmed = window.confirm('Clear sent and skipped statuses and restart this session?');
+    if (!confirmed) return;
+
+    const resetRecipients = session.recipients.map((recipient) => ({
+      ...recipient,
+      sendStatus: 'pending' as const,
+      sentAt: null,
+      skipReason: null,
+      notes: '',
+      patientPhoneInput: recipient.mobileDisplay,
+    }));
+
+    setLastAction(null);
+    setShowSessionSummary(false);
+    setSendLog([]);
+    await updateRecipients(resetRecipients, { currentIndex: 0, status: 'in_progress' });
+  }, [session, updateRecipients]);
+
+  const finishAndReturnToUpload = useCallback(async () => {
+    if (!session) return;
+    await deleteSession(session.id);
+    setActiveSession(null);
+    navigate('/upload');
+  }, [session, setActiveSession, navigate]);
+
   const actionsRef = useRef<{
     markSent: () => void;
     markSkipped: () => void;
@@ -201,6 +268,7 @@ export default function SendPage() {
     copyMessage: () => void;
     previous: () => void;
     next: () => void;
+    undo: () => void;
   } | null>(null);
 
   useEffect(() => {
@@ -251,6 +319,9 @@ export default function SendPage() {
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         actionsRef.current.next();
+      } else if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        actionsRef.current.undo();
       }
     };
 
@@ -259,11 +330,7 @@ export default function SendPage() {
   }, [session, showSkipInput, fallbackText]);
 
   if (isHydrating) {
-    return (
-      <div className="mx-auto max-w-3xl py-12 text-center text-muted-foreground">
-        Restoring your send session…
-      </div>
-    );
+    return <div className="mx-auto max-w-3xl py-16 text-center text-muted-foreground">Restoring your send session…</div>;
   }
 
   if (!session) return null;
@@ -275,6 +342,14 @@ export default function SendPage() {
   const processedCount = sentCount + skippedCount;
   const totalCount = session.recipients.length;
   const isComplete = pendingCount === 0 || session.status === 'completed';
+  const filteredRecipients = session.recipients.filter((recipient) => {
+    if (queueFilter === 'pending') return recipient.sendStatus === 'pending';
+    if (queueFilter === 'skipped') return recipient.sendStatus === 'skipped';
+    return true;
+  });
+  const httpSmsConfigured = Boolean(localStorage.getItem(HTTPSMS_API_KEY_STORAGE) && localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE));
+  const currentPatientPhone = currentRecipient?.patientPhoneInput || currentRecipient?.mobileDisplay || '';
+  const currentPatientPhoneValid = isValidAUMobile(toE164AU(currentPatientPhone));
 
   const copyToClipboard = async (text: string, field: 'number' | 'message') => {
     try {
@@ -291,6 +366,72 @@ export default function SendPage() {
     navigate('/upload');
   };
 
+  const updateCurrentRecipient = async (updates: Partial<SendSessionRecipient>) => {
+    if (!currentRecipient) return;
+    const nextRecipients = [...session.recipients];
+    nextRecipients[session.currentIndex] = { ...currentRecipient, ...updates };
+    await updateRecipients(nextRecipients);
+  };
+
+  const handlePatientPhoneBlur = async () => {
+    if (!currentRecipient) return;
+    const normalised = toE164AU(currentPatientPhone);
+    if (!isValidAUMobile(normalised)) return;
+    const localDisplay = `0${normalised.slice(3)}`.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3');
+    await updateCurrentRecipient({ patientPhoneInput: localDisplay });
+  };
+
+  const appendSendLog = (entry: Omit<SendLogEntry, 'id'>) => {
+    setSendLog((current) => [{ id: generateId(), ...entry }, ...current]);
+  };
+
+  const handleSendSms = async () => {
+    if (!currentRecipient || !httpSmsConfigured) return;
+
+    const apiKey = localStorage.getItem(HTTPSMS_API_KEY_STORAGE) ?? '';
+    const from = localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE) ?? '';
+    const to = toE164AU(currentPatientPhone);
+
+    if (!currentPatientPhoneValid) {
+      toast({
+        title: 'SMS not sent',
+        description: 'Please enter a valid Australian mobile number',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSendState({ status: 'sending', recipientId: currentRecipient.id });
+    const result = await sendSMS({
+      apiKey,
+      from,
+      to,
+      content: currentRecipient.renderedMessage,
+    });
+
+    if (!result.success) {
+      toast({ title: 'SMS not sent', description: result.error, variant: 'destructive' });
+      appendSendLog({
+        timestamp: new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
+        maskedPhone: `••••${to.slice(-4)}`,
+        templateLabel: session.sourceFileName.replace(/\.xlsx$/i, ''),
+        status: 'failed',
+      });
+      setSendState({ status: 'idle', recipientId: null });
+      return;
+    }
+
+    appendSendLog({
+      timestamp: new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
+      maskedPhone: `••••${to.slice(-4)}`,
+      templateLabel: session.sourceFileName.replace(/\.xlsx$/i, ''),
+      status: 'sent',
+    });
+    setShowSendLog(true);
+    setSendState({ status: 'sent', recipientId: currentRecipient.id });
+    window.setTimeout(() => setSendState({ status: 'idle', recipientId: null }), 2500);
+  };
+
   actionsRef.current = {
     markSent: () => void markCurrentPatientSent(),
     markSkipped: () => void markCurrentPatientSkipped(),
@@ -298,97 +439,180 @@ export default function SendPage() {
     copyMessage: () => currentRecipient && void copyToClipboard(currentRecipient.renderedMessage, 'message'),
     previous: () => void goToPreviousRecipient(),
     next: () => void goToNextRecipient(),
+    undo: () => void undoLastAction(),
   };
 
-  if (isComplete) {
+  if (isComplete || showSessionSummary) {
     return (
-      <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
-        <div className="rounded-2xl border border-border bg-card p-8">
-          <h2 className="mb-2 text-2xl font-medium">Session complete</h2>
-          <p className="text-muted-foreground">{sentCount} sent · {skippedCount} skipped</p>
+      <div className="mx-auto max-w-4xl space-y-8 py-12">
+        <section className="text-center">
+          <p className="frost-pill text-[#11ff99]">Session summary</p>
+          <h1 className="mt-4">{isComplete ? 'Session complete.' : 'Session snapshot.'}</h1>
+          <p className="mt-4 text-muted-foreground">{sentCount} sent · {skippedCount} skipped · {pendingCount} pending</p>
+        </section>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <SummaryStat label="Sent" value={sentCount} className="text-[#11ff99]" />
+          <SummaryStat label="Skipped" value={skippedCount} className="text-[#ffc53d]" />
+          <SummaryStat label="Pending" value={pendingCount} className="text-muted-foreground" />
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Button onClick={() => navigate('/results')}>View Full Results</Button>
-          <Button variant="outline" onClick={() => navigate('/results')}>Download Updated Spreadsheet</Button>
+
+        {skippedCount > 0 && (
+          <div className="frost-panel border-[#ffc53d]/20 bg-[#ffc53d]/5 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3>Skipped patients</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Review and return to these patients if needed.</p>
+              </div>
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => { setQueueFilter('skipped'); setShowSessionSummary(false); }}>
+                <Filter className="mr-2 h-4 w-4" /> Review skipped
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap justify-center gap-3">
+          {lastAction && (
+            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void undoLastAction()}>
+              <Undo2 className="mr-2 h-4 w-4" /> Undo last
+            </Button>
+          )}
+          {pendingCount > 0 && (
+            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowSessionSummary(false)}>
+              Return to session
+            </Button>
+          )}
+          <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void restartSession()}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Restart session
+          </Button>
+          <Button className="rounded-full" onClick={() => navigate('/results')}>View full results</Button>
+          <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void finishAndReturnToUpload()}>
+            Send another batch
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl pb-40">
+    <div className="space-y-6 pb-40">
+      <section className="max-w-4xl space-y-4">
+        <p className="frost-pill text-[#ffa057]">Send workflow</p>
+        <h1>Move through each patient with a clean queue and direct send controls.</h1>
+        <p className="max-w-2xl text-lg text-muted-foreground">
+          Copy manually into Messages or send directly through httpSMS, then keep the session state accurate as you go.
+        </p>
+      </section>
+
       {showInstructions && (
-        <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="mb-2 font-medium">How to send each message:</p>
-          <p className="text-muted-foreground">Keep this tab open alongside <strong>messages.google.com</strong> in another tab.</p>
-          <ol className="mt-2 ml-4 list-decimal space-y-1 text-muted-foreground">
-            <li>Tap <strong>Copy Number</strong> → switch to Messages tab → paste into "To:" → Enter</li>
-            <li>Tap <strong>Copy Message</strong> → switch to Messages tab → paste into message field → Send</li>
-            <li>Return here → tap <strong>Mark Sent & Next</strong></li>
+        <div className="frost-panel border-[#3b9eff]/20 bg-[#3b9eff]/5 p-5 text-sm">
+          <p className="font-medium text-foreground">How to send each message</p>
+          <p className="mt-2 text-muted-foreground">Keep this tab open alongside <strong>messages.google.com</strong> in another tab.</p>
+          <ol className="mt-3 ml-4 list-decimal space-y-1 text-muted-foreground">
+            <li>Tap <strong>Copy Number</strong>, switch to Messages, paste into “To:”, then press Enter.</li>
+            <li>Tap <strong>Copy Message</strong>, paste into the message field, then send.</li>
+            <li>Return here and tap <strong>Mark Sent & Next</strong>.</li>
           </ol>
           <button
-            className="mt-3 text-sm font-medium text-primary hover:underline"
+            className="mt-4 text-sm font-medium text-[#3b9eff] hover:underline"
             onClick={() => {
               setShowInstructions(false);
               localStorage.setItem('hughs-instructions-dismissed', 'true');
             }}
           >
-            Got it — don't show again
+            Got it, don&apos;t show again
           </button>
         </div>
       )}
 
-      <div className="mb-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="frost-panel p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-medium text-foreground">{processedCount} of {totalCount} patients processed</p>
             <p className="text-sm text-muted-foreground">{sentCount} sent · {skippedCount} skipped · {pendingCount} pending</p>
           </div>
-          <div className="rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-            Patient {session.currentIndex + 1} of {totalCount}
-          </div>
+          <div className="frost-pill text-muted-foreground">Patient {session.currentIndex + 1} of {totalCount}</div>
         </div>
 
-        <div className="mt-4 grid h-3 grid-cols-3 overflow-hidden rounded-full bg-border">
-          <div className="h-full bg-success transition-all" style={{ width: `${(sentCount / totalCount) * 100}%` }} />
-          <div className="h-full bg-warning transition-all" style={{ width: `${(skippedCount / totalCount) * 100}%` }} />
-          <div className="h-full bg-muted transition-all" style={{ width: `${(pendingCount / totalCount) * 100}%` }} />
+        <div className="mt-5 flex h-3 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full bg-[#11ff99] transition-all" style={{ width: `${(sentCount / totalCount) * 100}%` }} />
+          <div className="h-full bg-[#ffc53d] transition-all" style={{ width: `${(skippedCount / totalCount) * 100}%` }} />
+          <div className="h-full bg-white/15 transition-all" style={{ width: `${(pendingCount / totalCount) * 100}%` }} />
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
           {currentRecipient && (
-            <div className="rounded-2xl border border-primary/20 bg-card p-6 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="frost-panel p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-primary">Current patient</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Row {currentRecipient.originalRowNumber}</p>
-                  <h2 className="text-2xl font-medium">{currentRecipient.firstName} {currentRecipient.lastName}</h2>
-                  <p className="font-mono text-muted-foreground">{currentRecipient.mobileDisplay}</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#3b9eff]">Current patient</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Row {currentRecipient.originalRowNumber}</p>
+                  <h2 className="mt-2">{currentRecipient.firstName} {currentRecipient.lastName}</h2>
+                  <p className="mt-2 font-mono text-muted-foreground">{currentRecipient.mobileDisplay}</p>
                 </div>
-                <div className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                <div
+                  className={`frost-pill ${
+                    currentRecipient.sendStatus === 'pending'
+                      ? 'text-muted-foreground'
+                      : currentRecipient.sendStatus === 'sent'
+                        ? 'bg-[#11ff99]/10 text-[#11ff99]'
+                        : 'bg-[#ffc53d]/10 text-[#ffc53d]'
+                  }`}
+                >
                   {currentRecipient.sendStatus === 'pending' ? 'Pending' : currentRecipient.sendStatus === 'sent' ? 'Sent' : 'Skipped'}
                 </div>
               </div>
 
-              <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Message preview</p>
-                <p className="whitespace-pre-wrap text-sm">{currentRecipient.renderedMessage}</p>
+              <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Message preview</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{currentRecipient.renderedMessage}</p>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <Button className="h-[52px] text-base" onClick={() => copyToClipboard(currentRecipient.mobileForCopy, 'number')}>
-                  {copiedField === 'number' ? <><Check className="mr-2 h-5 w-5" /> Copied!</> : <><Clipboard className="mr-2 h-5 w-5" /> Copy Number <kbd className="ml-1.5 rounded border border-current/20 px-1 text-[10px] opacity-50">N</kbd></>}
+              <div className="mt-5 space-y-2">
+                <label className="block text-sm font-medium">Patient Mobile Number</label>
+                <Input
+                  type="tel"
+                  value={currentPatientPhone}
+                  placeholder="e.g. 0412 345 678"
+                  className={!currentPatientPhoneValid ? 'border-[#ff2047] focus-visible:ring-[#ff2047]' : ''}
+                  onChange={(e) => void updateCurrentRecipient({ patientPhoneInput: e.target.value })}
+                  onBlur={() => void handlePatientPhoneBlur()}
+                />
+                {!currentPatientPhoneValid && <p className="text-sm text-[#ff8aa0]">Please enter a valid Australian mobile number</p>}
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <Button className="h-[52px] rounded-full text-base" onClick={() => copyToClipboard(currentRecipient.mobileForCopy, 'number')}>
+                  {copiedField === 'number' ? <><Check className="mr-2 h-5 w-5" /> Copied!</> : <><Clipboard className="mr-2 h-5 w-5" /> Copy Number</>}
                 </Button>
-                <Button className="h-[52px] text-base" onClick={() => copyToClipboard(currentRecipient.renderedMessage, 'message')} style={copiedField === 'message' ? { backgroundColor: 'hsl(var(--success))' } : undefined}>
-                  {copiedField === 'message' ? <><Check className="mr-2 h-5 w-5" /> Copied!</> : <><Clipboard className="mr-2 h-5 w-5" /> Copy Message <kbd className="ml-1.5 rounded border border-current/20 px-1 text-[10px] opacity-50">M</kbd></>}
+                <Button className="h-[52px] rounded-full text-base" onClick={() => copyToClipboard(currentRecipient.renderedMessage, 'message')}>
+                  {copiedField === 'message' ? <><Check className="mr-2 h-5 w-5" /> Copied!</> : <><Clipboard className="mr-2 h-5 w-5" /> Copy Message</>}
                 </Button>
               </div>
 
-              <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <div className="mt-3">
+                <Button
+                  variant="secondary"
+                  className="h-[48px] w-full rounded-full border border-white/10 bg-white/5 text-base text-foreground hover:bg-white/10 sm:w-auto"
+                  onClick={() => void handleSendSms()}
+                  disabled={sendState.status === 'sending' || !httpSmsConfigured}
+                  title={!httpSmsConfigured ? 'Configure httpSMS in Settings first' : undefined}
+                >
+                  {sendState.status === 'sending' && sendState.recipientId === currentRecipient.id ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</>
+                  ) : sendState.status === 'sent' && sendState.recipientId === currentRecipient.id ? (
+                    <><Check className="mr-2 h-4 w-4 text-[#11ff99]" /> Sent!</>
+                  ) : (
+                    <><SendHorizontal className="mr-2 h-4 w-4" /> Send SMS</>
+                  )}
+                </Button>
+              </div>
+
+              <div className="mt-5 space-y-3 border-t border-white/10 pt-5">
                 {!session.complianceAcknowledged && (
-                  <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm">
+                  <label className="flex cursor-pointer items-start gap-2 rounded-2xl border border-[#ffc53d]/30 bg-[#ffc53d]/5 p-4 text-sm">
                     <Checkbox
                       className="mt-0.5"
                       onCheckedChange={(v) => {
@@ -399,15 +623,17 @@ export default function SendPage() {
                   </label>
                 )}
 
-                <div>
-                  <Input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-                </div>
+                <Input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
 
                 {showSkipInput && (
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Input placeholder="Reason for skip (optional)" value={skipReason} onChange={(e) => setSkipReason(e.target.value)} className="sm:max-w-xs" />
-                    <Button variant="outline" onClick={() => void markCurrentPatientSkipped()}>Confirm Skip</Button>
-                    <Button variant="ghost" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>Keep Pending</Button>
+                    <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void markCurrentPatientSkipped()}>
+                      Confirm Skip
+                    </Button>
+                    <Button variant="ghost" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
+                      Keep Pending
+                    </Button>
                   </div>
                 )}
               </div>
@@ -415,83 +641,122 @@ export default function SendPage() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-medium">Queue</h3>
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs">
-              <Checkbox checked={showPendingOnly} onCheckedChange={(v) => setShowPendingOnly(!!v)} />
-              Pending only
-            </label>
+        <div className="frost-panel p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3>Queue</h3>
+            <select
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground outline-none"
+              value={queueFilter}
+              onChange={(e) => setQueueFilter(e.target.value as QueueFilter)}
+            >
+              <option value="all">All patients</option>
+              <option value="pending">Pending only</option>
+              <option value="skipped">Skipped only</option>
+            </select>
           </div>
 
-          <div className="max-h-[60vh] space-y-1 overflow-y-auto">
-            {session.recipients
-              .filter((r) => !showPendingOnly || r.sendStatus === 'pending')
-              .map((r) => {
-                const realIdx = session.recipients.indexOf(r);
-                const isCurrent = realIdx === session.currentIndex;
-                return (
-                  <button
-                    key={r.id}
-                    className={`w-full rounded-xl border px-3 py-3 text-left text-sm transition-colors ${
-                      isCurrent
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : r.sendStatus === 'sent'
-                          ? 'border-success/20 bg-success/5 text-foreground/70'
-                          : r.sendStatus === 'skipped'
-                            ? 'border-warning/20 bg-warning/5 text-foreground/80'
-                            : 'border-transparent hover:bg-muted'
-                    }`}
-                    onClick={() => void navigateToRecipient(realIdx)}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium">{r.firstName} {r.lastName}</span>
-                      <span className="text-xs">
-                        {r.sendStatus === 'sent' && <span className="text-success">✓ Sent</span>}
-                        {r.sendStatus === 'skipped' && <span className="text-warning">Skipped</span>}
-                        {r.sendStatus === 'pending' && <span className="text-muted-foreground">Pending</span>}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      <UserRound className="h-3 w-3" /> Row {r.originalRowNumber}
-                    </div>
-                  </button>
-                );
-              })}
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {filteredRecipients.map((recipient) => {
+              const realIdx = session.recipients.indexOf(recipient);
+              const isCurrent = realIdx === session.currentIndex;
+              return (
+                <button
+                  key={recipient.id}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition-colors ${
+                    isCurrent
+                      ? 'border-white/20 bg-white text-black'
+                      : recipient.sendStatus === 'sent'
+                        ? 'border-[#11ff99]/20 bg-[#11ff99]/5 text-foreground/80'
+                        : recipient.sendStatus === 'skipped'
+                          ? 'border-[#ffc53d]/20 bg-[#ffc53d]/5 text-foreground/85'
+                          : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
+                  }`}
+                  onClick={() => void navigateToRecipient(realIdx)}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`font-medium ${recipient.sendStatus === 'sent' ? 'line-through' : ''}`}>
+                      {recipient.firstName} {recipient.lastName}
+                    </span>
+                    <span className="text-xs">
+                      {recipient.sendStatus === 'sent' && <span className="text-[#11ff99]">✓ Sent</span>}
+                      {recipient.sendStatus === 'skipped' && <span className="text-[#ffc53d]">Skipped</span>}
+                      {recipient.sendStatus === 'pending' && <span className="text-muted-foreground">Pending</span>}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <UserRound className="h-3 w-3" /> Row {recipient.originalRowNumber}
+                  </div>
+                </button>
+              );
+            })}
+            {filteredRecipients.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-muted-foreground">No patients match this filter.</div>}
           </div>
 
-          <div className="mt-4 border-t border-border pt-3">
-            <Button variant="outline" size="sm" className="w-full" onClick={() => void pauseSession()}>
+          <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+            <Button variant="outline" size="sm" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowSessionSummary(true)}>
+              View session summary
+            </Button>
+            <Button variant="outline" size="sm" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void pauseSession()}>
               <Pause className="mr-1 h-3 w-3" /> Pause & save
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      {sendLog.length > 0 && (
+        <div className="frost-panel mt-6">
+          <button type="button" className="flex w-full items-center justify-between px-4 py-4 text-left" onClick={() => setShowSendLog((value) => !value)}>
+            <span className="text-sm font-medium">Today&apos;s Sends ({sendLog.filter((entry) => entry.status === 'sent').length})</span>
+            {showSendLog ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          {showSendLog && (
+            <div className="border-t border-white/10 px-4 py-4">
+              <div className="space-y-2 text-sm">
+                {sendLog.map((entry) => (
+                  <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white/[0.03] px-4 py-3">
+                    <span className="text-muted-foreground">{entry.timestamp}</span>
+                    <span>{entry.maskedPhone}</span>
+                    <span className="text-muted-foreground">{entry.templateLabel}</span>
+                    <span className={entry.status === 'sent' ? 'text-[#11ff99]' : 'text-[#ff8aa0]'}>{entry.status === 'sent' ? 'Sent ✓' : 'Failed ✗'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="section-shell flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">Patient {session.currentIndex + 1} of {totalCount} — {currentRecipient?.firstName} {currentRecipient?.lastName}</p>
-            <p className="text-xs text-muted-foreground">Enter = mark sent, S = skip, ←/→ = move, N = copy number, M = copy message</p>
+            <p className="truncate text-sm font-medium">
+              Patient {session.currentIndex + 1} of {totalCount} , {currentRecipient?.firstName} {currentRecipient?.lastName}
+            </p>
+            <p className="text-xs text-muted-foreground">Enter = sent, S = skip, Z = undo, ←/→ = move, N = copy number, M = copy message</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => void goToPreviousRecipient()} disabled={session.currentIndex === 0}>
+            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void goToPreviousRecipient()} disabled={session.currentIndex === 0}>
               <ArrowLeft className="mr-1 h-4 w-4" /> Previous
             </Button>
             {!showSkipInput ? (
-              <Button variant="outline" onClick={() => setShowSkipInput(true)} disabled={!currentRecipient || currentRecipient.sendStatus !== 'pending'}>
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowSkipInput(true)} disabled={!currentRecipient || currentRecipient.sendStatus !== 'pending'}>
                 <SkipForward className="mr-1 h-4 w-4" /> Skip
               </Button>
             ) : (
-              <Button variant="outline" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
                 <Undo2 className="mr-1 h-4 w-4" /> Keep Pending
               </Button>
             )}
-            <Button onClick={() => void markCurrentPatientSent()} disabled={!session.complianceAcknowledged || !currentRecipient || currentRecipient.sendStatus !== 'pending'}>
+            {lastAction && (
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void undoLastAction()}>
+                <Undo2 className="mr-1 h-4 w-4" /> Undo Last
+              </Button>
+            )}
+            <Button className="rounded-full" onClick={() => void markCurrentPatientSent()} disabled={!session.complianceAcknowledged || !currentRecipient || currentRecipient.sendStatus !== 'pending'}>
               <Check className="mr-1 h-4 w-4" /> Mark Sent & Next
             </Button>
-            <Button variant="outline" onClick={() => void goToNextRecipient()} disabled={session.currentIndex >= totalCount - 1}>
+            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void goToNextRecipient()} disabled={session.currentIndex >= totalCount - 1}>
               Next <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
@@ -499,16 +764,33 @@ export default function SendPage() {
       </div>
 
       {fallbackText && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50">
-          <div className="mx-4 w-full max-w-md space-y-4 rounded-2xl bg-card p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md space-y-4 rounded-3xl border border-white/10 bg-black p-6">
             <div className="flex items-center gap-2 text-sm font-medium">
               <AlertCircle className="h-4 w-4" /> Copy this text manually
             </div>
-            <textarea className="w-full rounded-lg border border-border p-3 text-sm font-mono" rows={4} value={fallbackText} readOnly onClick={(e) => (e.target as HTMLTextAreaElement).select()} />
-            <Button className="w-full" onClick={() => setFallbackText(null)}>Done</Button>
+            <textarea
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm font-mono text-foreground"
+              rows={4}
+              value={fallbackText}
+              readOnly
+              onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+            />
+            <Button className="w-full rounded-full" onClick={() => setFallbackText(null)}>
+              Done
+            </Button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, className }: { label: string; value: number; className: string }) {
+  return (
+    <div className="frost-panel p-5 text-center">
+      <p className={`text-4xl font-semibold ${className}`}>{value}</p>
+      <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -43,10 +43,11 @@ export default function MessageBuilderPage() {
     setTemplateName('');
   };
 
-  if (selected.length === 0) {
-    navigate('/review');
-    return null;
-  }
+  useEffect(() => {
+    if (selected.length === 0) navigate('/review');
+  }, [selected.length, navigate]);
+
+  if (selected.length === 0) return null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
