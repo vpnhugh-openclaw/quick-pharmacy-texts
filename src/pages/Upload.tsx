@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, ArrowRight, RotateCcw } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, ArrowRight, RotateCcw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import HttpSmsSetupGuide from '@/components/HttpSmsSetupGuide';
 import { useAppStore } from '@/store/app-store';
 import { parseSpreadsheet } from '@/lib/spreadsheet';
 import { getActiveSession, saveSession } from '@/lib/persistence';
@@ -14,6 +15,8 @@ export default function UploadPage() {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [persistedSession, setPersistedSession] = useState<SendSession | null>(null);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [setupBannerDismissed, setSetupBannerDismissed] = useState(false);
 
   useEffect(() => {
     getActiveSession().then((s) => s && setPersistedSession(s));
@@ -99,6 +102,9 @@ export default function UploadPage() {
     [handleFile]
   );
 
+  const httpSmsConfigured = Boolean(localStorage.getItem('httpsms_api_key'));
+  const showSetupBanner = !httpSmsConfigured && !setupBannerDismissed;
+
   return (
     <div className="space-y-8">
       <section className="space-y-4">
@@ -110,6 +116,23 @@ export default function UploadPage() {
           </p>
         </div>
       </section>
+
+      {showSetupBanner && (
+        <div className="frost-panel flex items-start justify-between gap-4 border border-[#60a5fa]/20 bg-[#1d4ed8]/10 p-4">
+          <button type="button" className="min-w-0 text-left" onClick={() => setShowSetupGuide(true)}>
+            <p className="text-sm font-medium text-[#dbeafe]">💡 Want to send texts directly without copy-pasting?</p>
+            <p className="mt-1 text-sm text-[#bfdbfe]">Set up direct sending in 3 steps. Show me how →</p>
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss setup guide banner"
+            className="rounded-full p-1 text-[#bfdbfe] transition hover:bg-white/10 hover:text-white"
+            onClick={() => setSetupBannerDismissed(true)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {persistedSession && (
         <div className="frost-panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -232,6 +255,15 @@ export default function UploadPage() {
           {error}
         </div>
       )}
+
+      <HttpSmsSetupGuide
+        open={showSetupGuide}
+        onOpenChange={setShowSetupGuide}
+        onOpenSettings={() => {
+          setShowSetupGuide(false);
+          navigate('/settings');
+        }}
+      />
     </div>
   );
 }
