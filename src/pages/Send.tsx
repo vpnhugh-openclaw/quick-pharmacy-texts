@@ -250,7 +250,7 @@ export default function SendPage() {
                   {copiedField === 'number' ? (
                     <><Check className="mr-2 h-5 w-5" /> Copied!</>
                   ) : (
-                    <><Clipboard className="mr-2 h-5 w-5" /> Copy Number</>
+                    <><Clipboard className="mr-2 h-5 w-5" /> Copy Number <kbd className="ml-1.5 text-[10px] opacity-50 border border-current/20 rounded px-1">N</kbd></>
                   )}
                 </Button>
                 <Button
@@ -261,7 +261,7 @@ export default function SendPage() {
                   {copiedField === 'message' ? (
                     <><Check className="mr-2 h-5 w-5" /> Copied!</>
                   ) : (
-                    <><Clipboard className="mr-2 h-5 w-5" /> Copy Message</>
+                    <><Clipboard className="mr-2 h-5 w-5" /> Copy Message <kbd className="ml-1.5 text-[10px] opacity-50 border border-current/20 rounded px-1">M</kbd></>
                   )}
                 </Button>
               </div>
