@@ -169,6 +169,14 @@ export default function SendPage() {
     navigate('/upload');
   };
 
+  // Keep ref in sync for keyboard shortcuts
+  actionsRef.current = {
+    markSent,
+    markSkipped,
+    copyNumber: () => currentRecipient && copyToClipboard(currentRecipient.mobileForCopy, 'number'),
+    copyMessage: () => currentRecipient && copyToClipboard(currentRecipient.renderedMessage, 'message'),
+  };
+
   if (isComplete || session.status === 'completed') {
     return (
       <div className="mx-auto max-w-lg text-center space-y-6 py-12">
