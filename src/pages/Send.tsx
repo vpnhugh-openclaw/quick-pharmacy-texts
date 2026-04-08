@@ -254,6 +254,42 @@ export default function SendPage() {
     await updateRecipients(resetRecipients, { currentIndex: 0, status: 'in_progress' });
   }, [session, updateRecipients]);
 
+  const clearCurrentQueue = useCallback(async () => {
+    if (!session) return;
+
+    const label = queueFilter === 'all' ? 'entire queue' : queueFilter === 'pending' ? 'pending queue' : 'skipped queue';
+    const confirmed = window.confirm(`Clear the ${label} and reset those patients back to pending?`);
+    if (!confirmed) return;
+
+    const resetRecipients = session.recipients.map((recipient) => {
+      const matchesFilter = queueFilter === 'all'
+        ? true
+        : queueFilter === 'pending'
+          ? recipient.sendStatus === 'pending'
+          : recipient.sendStatus === 'skipped';
+
+      if (!matchesFilter) return recipient;
+
+      return {
+        ...recipient,
+        sendStatus: 'pending' as const,
+        sentAt: null,
+        skipReason: null,
+        notes: '',
+        patientPhoneInput: recipient.mobileDisplay,
+      };
+    });
+
+    const nextCurrentIndex = resetRecipients.findIndex((recipient) => recipient.sendStatus === 'pending');
+
+    setLastAction(null);
+    setShowSessionSummary(false);
+    await updateRecipients(resetRecipients, {
+      currentIndex: nextCurrentIndex >= 0 ? nextCurrentIndex : 0,
+      status: 'in_progress',
+    });
+  }, [session, queueFilter, updateRecipients]);
+
   const finishAndReturnToUpload = useCallback(async () => {
     if (!session) return;
     await deleteSession(session.id);
@@ -693,6 +729,9 @@ export default function SendPage() {
           </div>
 
           <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+            <Button variant="outline" size="sm" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void clearCurrentQueue()}>
+              <RotateCcw className="mr-1 h-3 w-3" /> Clear current queue
+            </Button>
             <Button variant="outline" size="sm" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowSessionSummary(true)}>
               View session summary
             </Button>
