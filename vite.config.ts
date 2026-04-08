@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger ? componentTagger() : null].filter(Boolean) as import('vite').PluginOption[],
+  plugins: [react(), mode === "development" && componentTagger ? componentTagger() : null].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

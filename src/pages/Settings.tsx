@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Eye, EyeOff, Loader2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import HttpSmsSetupGuide from '@/components/HttpSmsSetupGuide';
 import { useAppStore } from '@/store/app-store';
 import { normaliseAustralianMobile } from '@/lib/sms-utils';
 import { isValidAUMobile, testConnection, toE164AU } from '@/services/httpsms';
@@ -10,12 +12,14 @@ const HTTPSMS_API_KEY_STORAGE = 'httpsms_api_key';
 const HTTPSMS_FROM_NUMBER_STORAGE = 'httpsms_from_number';
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { settings, setSettings, savedTemplates, setSavedTemplates } = useAppStore();
   const [suppMobile, setSuppMobile] = useState('');
   const [suppReason, setSuppReason] = useState('');
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(HTTPSMS_API_KEY_STORAGE) ?? '');
   const [fromNumberInput, setFromNumberInput] = useState(() => localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE) ?? '');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [testStatus, setTestStatus] = useState<{ state: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ state: 'idle', message: '' });
 
   const formattedFromNumber = useMemo(() => {
@@ -124,6 +128,9 @@ export default function SettingsPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">Get your key from httpsms.com/settings</p>
+            <button type="button" className="text-sm font-medium text-[#93c5fd] transition hover:text-white" onClick={() => setShowSetupGuide(true)}>
+              How to set this up →
+            </button>
           </div>
 
           <div className="space-y-2">
@@ -253,6 +260,14 @@ export default function SettingsPage() {
           )}
         </div>
       </section>
+      <HttpSmsSetupGuide
+        open={showSetupGuide}
+        onOpenChange={setShowSetupGuide}
+        onOpenSettings={() => {
+          setShowSetupGuide(false);
+          navigate('/settings');
+        }}
+      />
     </div>
   );
 }

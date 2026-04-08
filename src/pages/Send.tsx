@@ -634,8 +634,9 @@ export default function SendPage() {
               <div className="mt-3">
                 <Button
                   data-testid="send-sms-button"
+                  aria-label="Send SMS Directly"
                   variant="secondary"
-                  className="h-[48px] w-full rounded-full border border-white/10 bg-white/5 text-base text-foreground hover:bg-white/10 sm:w-auto"
+                  className={`h-[48px] w-full rounded-full border text-base font-medium ${sendState.status === 'sending' || !httpSmsConfigured ? 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/5' : 'border-[#16a34a] bg-[#16a34a] text-white hover:bg-[#15803d]'}`}
                   onClick={() => void handleSendSms()}
                   disabled={sendState.status === 'sending' || !httpSmsConfigured}
                   title={!httpSmsConfigured ? 'Configure httpSMS in Settings first' : undefined}
@@ -643,9 +644,9 @@ export default function SendPage() {
                   {sendState.status === 'sending' && sendState.recipientId === currentRecipient.id ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</>
                   ) : sendState.status === 'sent' && sendState.recipientId === currentRecipient.id ? (
-                    <><Check className="mr-2 h-4 w-4 text-[#11ff99]" /> Sent!</>
+                    <><Check className="mr-2 h-4 w-4" /> ✓ Sent!</>
                   ) : (
-                    <><SendHorizontal className="mr-2 h-4 w-4" /> Send SMS</>
+                    <><SendHorizontal className="mr-2 h-4 w-4" /> Send SMS Directly</>
                   )}
                 </Button>
               </div>
@@ -772,37 +773,37 @@ export default function SendPage() {
         </div>
       )}
 
-      <div data-testid="send-bottom-bar" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/80 backdrop-blur-xl">
+      <div data-testid="send-bottom-bar" className="fixed inset-x-0 bottom-0 z-40 bg-[#1d4ed8] shadow-[0_-2px_8px_rgba(0,0,0,0.15)] backdrop-blur-xl">
         <div className="section-shell flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">
+            <p className="truncate text-sm font-medium text-white">
               Patient {session.currentIndex + 1} of {totalCount} , {currentRecipient?.firstName} {currentRecipient?.lastName}
             </p>
-            <p className="text-xs text-muted-foreground">Enter = sent, S = skip, Z = undo, ←/→ = move, N = copy number, M = copy message</p>
+            <p className="text-xs text-[#bfdbfe]">Enter = sent, S = skip, Z = undo, ←/→ = move, N = copy number, M = copy message</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void goToPreviousRecipient()} disabled={session.currentIndex === 0}>
+            <Button variant="outline" className="rounded-full border-white/20 bg-white/10 text-[#bfdbfe] hover:bg-white/20 hover:text-white" onClick={() => void goToPreviousRecipient()} disabled={session.currentIndex === 0}>
               <ArrowLeft className="mr-1 h-4 w-4" /> Previous
             </Button>
             {!showSkipInput ? (
-              <Button data-testid="send-skip-button" variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowSkipInput(true)} disabled={!currentRecipient || currentRecipient.sendStatus !== 'pending'}>
+              <Button data-testid="send-skip-button" variant="outline" className="rounded-full border-white/20 bg-white/10 text-[#bfdbfe] hover:bg-white/20 hover:text-white" onClick={() => setShowSkipInput(true)} disabled={!currentRecipient || currentRecipient.sendStatus !== 'pending'}>
                 <SkipForward className="mr-1 h-4 w-4" /> Skip
               </Button>
             ) : (
-              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
+              <Button variant="outline" className="rounded-full border-white/20 bg-white/10 text-[#bfdbfe] hover:bg-white/20 hover:text-white" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
                 <Undo2 className="mr-1 h-4 w-4" /> Keep Pending
               </Button>
             )}
             {lastAction && (
-              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void undoLastAction()}>
+              <Button variant="outline" className="rounded-full border-white/20 bg-white/10 text-[#bfdbfe] hover:bg-white/20 hover:text-white" onClick={() => void undoLastAction()}>
                 <Undo2 className="mr-1 h-4 w-4" /> Undo Last
               </Button>
             )}
-            <Button data-testid="send-mark-sent-next" className="rounded-full" onClick={() => void markCurrentPatientSent()} disabled={!session.complianceAcknowledged || !currentRecipient || currentRecipient.sendStatus !== 'pending'}>
+            <Button data-testid="send-mark-sent-next" className="rounded-full bg-white text-[#1d4ed8] hover:bg-white/90" onClick={() => void markCurrentPatientSent()} disabled={!session.complianceAcknowledged || !currentRecipient || currentRecipient.sendStatus !== 'pending'}>
               <Check className="mr-1 h-4 w-4" /> Mark Sent & Next
             </Button>
-            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void goToNextRecipient()} disabled={session.currentIndex >= totalCount - 1}>
+            <Button variant="outline" className="rounded-full border-white/20 bg-white/10 text-[#bfdbfe] hover:bg-white/20 hover:text-white" onClick={() => void goToNextRecipient()} disabled={session.currentIndex >= totalCount - 1}>
               Next <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
