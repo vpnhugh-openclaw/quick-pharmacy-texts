@@ -37,7 +37,7 @@ export default function ReviewPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
+      <div data-testid="review-selection-summary" className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
         <span className="text-sm font-medium">Selected <strong className="text-primary">{selectedCount}</strong></span>
         <span className="text-sm text-muted-foreground">· Valid {recipients.filter(r => r.isValidMobile && !r.isAlreadyTexted).length}</span>
         <span className="text-sm text-muted-foreground">· Already Texted {recipients.filter(r => r.isAlreadyTexted).length}</span>
@@ -48,7 +48,7 @@ export default function ReviewPage() {
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => selectFirst(25)}>First 25</Button>
         <Button variant="outline" size="sm" onClick={() => selectFirst(50)}>First 50</Button>
-        <Button variant="outline" size="sm" onClick={() => selectAllValid()}>All valid</Button>
+        <Button data-testid="review-select-all" variant="outline" size="sm" onClick={() => selectAllValid()}>All valid</Button>
         <Button variant="outline" size="sm" onClick={() => clearSelection()}>Clear</Button>
       </div>
 
@@ -90,7 +90,7 @@ export default function ReviewPage() {
             {filtered.map(r => {
               const disabled = r.isAlreadyTexted || !r.isValidMobile || r.isSuppressed;
               return (
-                <tr key={r.id} className={`border-b border-border last:border-0 ${disabled ? 'opacity-50' : ''}`}>
+                <tr key={r.id} data-testid="review-patient-row" className={`border-b border-border last:border-0 ${disabled ? 'opacity-50' : ''}`}>
                   <td className="px-3 py-2">
                     <Checkbox checked={r.isSelected} disabled={disabled} onCheckedChange={() => toggleRecipient(r.id)} />
                   </td>
@@ -115,7 +115,7 @@ export default function ReviewPage() {
       </div>
 
       <div className="flex justify-end">
-        <Button disabled={selectedCount === 0} onClick={() => navigate('/message')}>
+        <Button data-testid="review-continue-button" disabled={selectedCount === 0} onClick={() => navigate('/message')}>
           Continue with {selectedCount} patient{selectedCount !== 1 ? 's' : ''} <ArrowRight className="ml-1 h-4 w-4" />
         </Button>
       </div>

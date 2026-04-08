@@ -109,6 +109,7 @@ export default function SettingsPage() {
             <label className="text-sm font-medium text-foreground">httpSMS API Key</label>
             <div className="flex gap-2">
               <Input
+                data-testid="settings-api-key-input"
                 type={showApiKey ? 'text' : 'password'}
                 value={apiKey}
                 placeholder="Paste your httpSMS API key"
@@ -118,7 +119,7 @@ export default function SettingsPage() {
                   persistHttpSmsSettings(value, fromNumberInput);
                 }}
               />
-              <Button variant="outline" size="icon" type="button" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowApiKey((value) => !value)}>
+              <Button data-testid="settings-toggle-api-key" variant="outline" size="icon" type="button" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowApiKey((value) => !value)}>
                 {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
             </div>
@@ -128,6 +129,7 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Your Phone Number</label>
             <Input
+              data-testid="settings-from-number-input"
               type="tel"
               value={formattedFromNumber}
               placeholder="e.g. 0412 345 678"
@@ -139,7 +141,7 @@ export default function SettingsPage() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Connection test</label>
-            <Button variant="outline" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleTestConnection()} disabled={testStatus.state === 'loading'}>
+            <Button data-testid="settings-test-connection" variant="outline" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleTestConnection()} disabled={testStatus.state === 'loading'}>
               {testStatus.state === 'loading' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Test Connection
             </Button>

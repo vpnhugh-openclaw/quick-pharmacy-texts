@@ -93,7 +93,7 @@ export default function ResultsPage() {
           </thead>
           <tbody>
             {session.recipients.map((recipient) => (
-              <tr key={recipient.id} className="border-b border-white/10 last:border-0">
+              <tr data-testid="results-row" key={recipient.id} className="border-b border-white/10 last:border-0">
                 <td className="px-4 py-3 text-muted-foreground">{recipient.originalRowNumber}</td>
                 <td className="px-4 py-3">{recipient.firstName} {recipient.lastName}</td>
                 <td className="px-4 py-3 font-mono text-muted-foreground">{recipient.mobileDisplay}</td>
@@ -111,10 +111,10 @@ export default function ResultsPage() {
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <Button className="rounded-full" onClick={downloadSpreadsheet} disabled={!originalFileBuffer}>
+        <Button data-testid="results-download-spreadsheet" className="rounded-full" onClick={downloadSpreadsheet} disabled={!originalFileBuffer}>
           <Download className="mr-2 h-4 w-4" /> Download Updated Spreadsheet
         </Button>
-        <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={downloadCSV}>
+        <Button data-testid="results-download-csv" variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={downloadCSV}>
           <Download className="mr-2 h-4 w-4" /> Download CSV Summary
         </Button>
         <Button
