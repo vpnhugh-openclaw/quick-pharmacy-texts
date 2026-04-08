@@ -260,37 +260,34 @@ export default function SendPage() {
     if (!session) return;
 
     const label = queueFilter === 'all' ? 'entire queue' : queueFilter === 'pending' ? 'pending queue' : 'skipped queue';
-    const confirmed = window.confirm(`Clear the ${label} and reset those patients back to pending?`);
+    const confirmed = window.confirm(`Clear the ${label} from this session?`);
     if (!confirmed) return;
 
-    const resetRecipients = session.recipients.map((recipient) => {
-      const matchesFilter = queueFilter === 'all'
-        ? true
-        : queueFilter === 'pending'
-          ? recipient.sendStatus === 'pending'
-          : recipient.sendStatus === 'skipped';
-
-      if (!matchesFilter) return recipient;
-
-      return {
-        ...recipient,
-        sendStatus: 'pending' as const,
-        sentAt: null,
-        skipReason: null,
-        notes: '',
-        patientPhoneInput: recipient.mobileDisplay,
-      };
+    const remainingRecipients = session.recipients.filter((recipient) => {
+      if (queueFilter === 'all') return false;
+      if (queueFilter === 'pending') return recipient.sendStatus !== 'pending';
+      return recipient.sendStatus !== 'skipped';
     });
 
-    const nextCurrentIndex = resetRecipients.findIndex((recipient) => recipient.sendStatus === 'pending');
+    if (remainingRecipients.length === 0) {
+      await deleteSession(session.id);
+      setActiveSession(null);
+      setLastAction(null);
+      setShowSessionSummary(false);
+      navigate('/upload');
+      return;
+    }
+
+    const nextCurrentIndex = Math.max(0, remainingRecipients.findIndex((recipient) => recipient.sendStatus === 'pending'));
+    const nextStatus = remainingRecipients.some((recipient) => recipient.sendStatus === 'pending') ? 'in_progress' : 'completed';
 
     setLastAction(null);
     setShowSessionSummary(false);
-    await updateRecipients(resetRecipients, {
-      currentIndex: nextCurrentIndex >= 0 ? nextCurrentIndex : 0,
-      status: 'in_progress',
+    await updateRecipients(remainingRecipients, {
+      currentIndex: nextCurrentIndex,
+      status: nextStatus,
     });
-  }, [session, queueFilter, updateRecipients]);
+  }, [session, queueFilter, updateRecipients, navigate, setActiveSession]);
 
   const finishAndReturnToUpload = useCallback(async () => {
     if (!session) return;
