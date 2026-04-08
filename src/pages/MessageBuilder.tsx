@@ -76,6 +76,7 @@ export default function MessageBuilderPage() {
       <div>
         <label className="mb-1 block text-sm font-medium">Message</label>
         <Textarea
+          data-testid="message-template-textarea"
           ref={textareaRef}
           value={messageTemplate}
           onChange={e => setMessageTemplate(e.target.value)}
@@ -114,7 +115,7 @@ export default function MessageBuilderPage() {
         <p className="mb-3 text-sm font-medium text-muted-foreground">Live preview</p>
         <div className="space-y-3">
           {selected.slice(0, 3).map(r => (
-            <div key={r.id} className="rounded-xl border border-border p-3 text-sm">
+            <div key={r.id} data-testid="message-preview-card" className="rounded-xl border border-border p-3 text-sm">
               <p className="mb-1 text-xs font-medium text-muted-foreground">{r.firstName} {r.lastName}</p>
               <p className="whitespace-pre-wrap">{renderMessage(fullMessage, r, settings)}</p>
             </div>
@@ -130,7 +131,7 @@ export default function MessageBuilderPage() {
       </div>
 
       <div className="flex justify-end">
-        <Button disabled={!messageTemplate.trim()} onClick={() => navigate('/send')}>
+        <Button data-testid="message-start-sending" disabled={!messageTemplate.trim()} onClick={() => navigate('/send')}>
           Start sending <ArrowRight className="ml-1 h-4 w-4" />
         </Button>
       </div>

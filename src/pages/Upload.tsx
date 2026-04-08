@@ -34,12 +34,14 @@ export default function UploadPage() {
 
           const existingSession = persistedSession ?? (await getActiveSession()) ?? null;
           if (existingSession) {
-            const selectedRecipients = result.recipients.filter((recipient) => recipient.isSelected);
+            const eligibleRecipients = result.recipients.filter(
+              (recipient) => recipient.isValidMobile && !recipient.isAlreadyTexted && !recipient.isSuppressed
+            );
             const existingKeys = new Set(
               existingSession.recipients.map((recipient) => `${recipient.firstName.toLowerCase()}|${recipient.lastName.toLowerCase()}|${recipient.mobileForCopy || recipient.mobileDisplay}`)
             );
 
-            const appendedRecipients: SendSessionRecipient[] = selectedRecipients
+            const appendedRecipients: SendSessionRecipient[] = eligibleRecipients
               .filter((recipient) => {
                 const key = `${recipient.firstName.toLowerCase()}|${recipient.lastName.toLowerCase()}|${recipient.mobileForCopy || recipient.mobileDisplay}`;
                 return !existingKeys.has(key);
@@ -128,6 +130,7 @@ export default function UploadPage() {
 
       {!parseResult ? (
         <div
+          data-testid="upload-dropzone"
           className={`frost-panel cursor-pointer px-6 py-16 text-center transition-colors ${dragging ? 'border-white/30 bg-white/10' : 'hover:border-white/20 hover:bg-white/[0.06]'}`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -202,7 +205,7 @@ export default function UploadPage() {
               </thead>
               <tbody>
                 {parseResult.recipients.slice(0, 10).map((recipient) => (
-                  <tr key={recipient.id} className="border-b border-white/10 last:border-0">
+                  <tr key={recipient.id} data-testid="upload-patient-row" className="border-b border-white/10 last:border-0">
                     <td className="px-4 py-3 text-muted-foreground">{recipient.originalRowNumber}</td>
                     <td className="px-4 py-3">{recipient.firstName}</td>
                     <td className="px-4 py-3">{recipient.lastName}</td>
@@ -217,7 +220,7 @@ export default function UploadPage() {
           </div>
 
           <div className="flex justify-end">
-            <Button className="rounded-full px-6" onClick={() => navigate('/review')}>
+            <Button data-testid="upload-continue-button" className="rounded-full px-6" onClick={() => navigate('/review')}>
               Continue <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
