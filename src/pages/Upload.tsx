@@ -4,18 +4,19 @@ import { Upload, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, ArrowRigh
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/app-store';
 import { parseSpreadsheet } from '@/lib/spreadsheet';
-import { getActiveSession } from '@/lib/persistence';
-import type { ImportedRecipient, SendSession } from '@/types';
+import { getActiveSession, saveSession } from '@/lib/persistence';
+import { generateId, renderMessage } from '@/lib/sms-utils';
+import type { ImportedRecipient, SendSession, SendSessionRecipient } from '@/types';
 
 export default function UploadPage() {
   const navigate = useNavigate();
-  const { parseResult, setParseResult, settings, fileName, restoreSessionContext } = useAppStore();
+  const { parseResult, setParseResult, settings, fileName, restoreSessionContext, setActiveSession, messageTemplate } = useAppStore();
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeSession, setActiveSession] = useState<SendSession | null>(null);
+  const [persistedSession, setPersistedSession] = useState<SendSession | null>(null);
 
   useEffect(() => {
-    getActiveSession().then((s) => s && setActiveSession(s));
+    getActiveSession().then((s) => s && setPersistedSession(s));
   }, []);
 
   const handleFile = useCallback(
@@ -26,10 +27,56 @@ export default function UploadPage() {
       }
       setError(null);
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const buffer = e.target?.result as ArrayBuffer;
           const result = parseSpreadsheet(buffer, settings);
+
+          const existingSession = persistedSession ?? (await getActiveSession()) ?? null;
+          if (existingSession) {
+            const selectedRecipients = result.recipients.filter((recipient) => recipient.isSelected);
+            const existingKeys = new Set(
+              existingSession.recipients.map((recipient) => `${recipient.firstName.toLowerCase()}|${recipient.lastName.toLowerCase()}|${recipient.mobileForCopy || recipient.mobileDisplay}`)
+            );
+
+            const appendedRecipients: SendSessionRecipient[] = selectedRecipients
+              .filter((recipient) => {
+                const key = `${recipient.firstName.toLowerCase()}|${recipient.lastName.toLowerCase()}|${recipient.mobileForCopy || recipient.mobileDisplay}`;
+                return !existingKeys.has(key);
+              })
+              .map((recipient) => ({
+                id: generateId(),
+                sourceFileName: file.name,
+                originalRowNumber: recipient.originalRowNumber,
+                firstName: recipient.firstName,
+                firstNameForSms: recipient.firstNameForSms,
+                lastName: recipient.lastName,
+                mobileDisplay: recipient.mobileDisplay,
+                mobileForCopy: recipient.mobileForCopy,
+                renderedMessage: renderMessage(messageTemplate || result.template, recipient, settings),
+                sendStatus: 'pending',
+                sentAt: null,
+                skipReason: null,
+                notes: '',
+                patientPhoneInput: recipient.mobileDisplay,
+              }));
+
+            const mergedSession: SendSession = {
+              ...existingSession,
+              sourceFileName: existingSession.sourceFileName,
+              sourceFileNames: Array.from(new Set([...(existingSession.sourceFileNames ?? [existingSession.sourceFileName]), file.name])),
+              recipients: [...existingSession.recipients, ...appendedRecipients],
+              status: existingSession.status === 'completed' ? 'in_progress' : existingSession.status,
+              updatedAt: new Date().toISOString(),
+            };
+
+            await saveSession(mergedSession);
+            setActiveSession(mergedSession);
+            setError(appendedRecipients.length > 0 ? null : 'That spreadsheet did not add any new patients to the queue.');
+            navigate('/send');
+            return;
+          }
+
           setParseResult(result, buffer, file.name);
         } catch (err) {
           setError(`Failed to parse: ${(err as Error).message}`);
@@ -37,7 +84,7 @@ export default function UploadPage() {
       };
       reader.readAsArrayBuffer(file);
     },
-    [settings, setParseResult]
+    [settings, setParseResult, persistedSession, setActiveSession, navigate, messageTemplate]
   );
 
   const onDrop = useCallback(
@@ -62,18 +109,18 @@ export default function UploadPage() {
         </div>
       </section>
 
-      {activeSession && (
+      {persistedSession && (
         <div className="frost-panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <RotateCcw className="h-5 w-5 text-[#11ff99]" />
             <div>
               <p className="text-sm font-medium text-foreground">Unfinished session</p>
               <p className="text-sm text-muted-foreground">
-                {activeSession.sourceFileName} · {activeSession.recipients.filter((r) => r.sendStatus === 'sent').length} of {activeSession.recipients.length} sent
+                {persistedSession.sourceFileName} · {persistedSession.recipients.filter((r) => r.sendStatus === 'sent').length} of {persistedSession.recipients.length} sent
               </p>
             </div>
           </div>
-          <Button className="rounded-full" onClick={() => { restoreSessionContext(activeSession); navigate('/send'); }}>
+          <Button className="rounded-full" onClick={() => { restoreSessionContext(persistedSession); navigate('/send'); }}>
             Resume session <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

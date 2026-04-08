@@ -90,6 +90,7 @@ export default function SendPage() {
 
       const sessionRecipients: SendSessionRecipient[] = selected.map((r) => ({
         id: generateId(),
+        sourceFileName: useAppStore.getState().fileName,
         originalRowNumber: r.originalRowNumber,
         firstName: r.firstName,
         firstNameForSms: r.firstNameForSms,
@@ -107,6 +108,7 @@ export default function SendPage() {
       const session: SendSession = {
         id: generateId(),
         sourceFileName: useAppStore.getState().fileName,
+        sourceFileNames: [useAppStore.getState().fileName],
         messageBodySnapshot: messageTemplate,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

@@ -19,6 +19,7 @@ export interface ImportedRecipient {
 export interface SendSession {
   id: string;
   sourceFileName: string;
+  sourceFileNames?: string[];
   messageBodySnapshot: string;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +31,7 @@ export interface SendSession {
 
 export interface SendSessionRecipient {
   id: string;
+  sourceFileName?: string;
   originalRowNumber: number;
   firstName: string;
   firstNameForSms: string;
