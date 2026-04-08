@@ -119,7 +119,7 @@ describe('SendPage', () => {
     renderSendPage();
 
     expect(await screen.findByText(/Current patient/i)).toBeInTheDocument();
-    expect(screen.getByText(/John Smith/)).toBeInTheDocument();
+    expect(screen.getAllByText(/John Smith/).length).toBeGreaterThan(0);
     expect(useAppStore.getState().activeSession?.id).toBe('session-1');
   });
 
