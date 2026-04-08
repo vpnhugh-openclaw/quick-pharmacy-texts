@@ -330,11 +330,7 @@ export default function SendPage() {
   }, [session, showSkipInput, fallbackText]);
 
   if (isHydrating) {
-    return (
-      <div className="mx-auto max-w-3xl py-12 text-center text-muted-foreground">
-        Restoring your send session…
-      </div>
-    );
+    return <div className="mx-auto max-w-3xl py-16 text-center text-muted-foreground">Restoring your send session…</div>;
   }
 
   if (!session) return null;
@@ -448,48 +444,49 @@ export default function SendPage() {
 
   if (isComplete || showSessionSummary) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 py-12">
-        <div className="rounded-2xl border border-border bg-card p-8 text-center">
-          <h2 className="mb-2 text-2xl font-medium">{isComplete ? 'Session complete' : 'Session summary'}</h2>
-          <p className="text-muted-foreground">{sentCount} sent · {skippedCount} skipped · {pendingCount} pending</p>
-        </div>
+      <div className="mx-auto max-w-4xl space-y-8 py-12">
+        <section className="text-center">
+          <p className="frost-pill text-[#11ff99]">Session summary</p>
+          <h1 className="mt-4">{isComplete ? 'Session complete.' : 'Session snapshot.'}</h1>
+          <p className="mt-4 text-muted-foreground">{sentCount} sent · {skippedCount} skipped · {pendingCount} pending</p>
+        </section>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <SummaryStat label="Sent" value={sentCount} className="text-success" />
-          <SummaryStat label="Skipped" value={skippedCount} className="text-warning" />
+          <SummaryStat label="Sent" value={sentCount} className="text-[#11ff99]" />
+          <SummaryStat label="Skipped" value={skippedCount} className="text-[#ffc53d]" />
           <SummaryStat label="Pending" value={pendingCount} className="text-muted-foreground" />
         </div>
 
         {skippedCount > 0 && (
-          <div className="rounded-2xl border border-warning/20 bg-warning/5 p-5">
-            <div className="flex items-center justify-between gap-3">
+          <div className="frost-panel border-[#ffc53d]/20 bg-[#ffc53d]/5 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="font-medium text-foreground">Skipped patients</h3>
-                <p className="text-sm text-muted-foreground">Review and return to these patients if needed.</p>
+                <h3>Skipped patients</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Review and return to these patients if needed.</p>
               </div>
-              <Button variant="outline" onClick={() => { setQueueFilter('skipped'); setShowSessionSummary(false); }}>
-                <Filter className="mr-1 h-4 w-4" /> Review skipped
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => { setQueueFilter('skipped'); setShowSessionSummary(false); }}>
+                <Filter className="mr-2 h-4 w-4" /> Review skipped
               </Button>
             </div>
           </div>
         )}
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           {lastAction && (
-            <Button variant="outline" onClick={() => void undoLastAction()}>
-              <Undo2 className="mr-1 h-4 w-4" /> Undo last
+            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void undoLastAction()}>
+              <Undo2 className="mr-2 h-4 w-4" /> Undo last
             </Button>
           )}
           {pendingCount > 0 && (
-            <Button variant="outline" onClick={() => setShowSessionSummary(false)}>
+            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowSessionSummary(false)}>
               Return to session
             </Button>
           )}
-          <Button variant="outline" onClick={() => void restartSession()}>
-            <RotateCcw className="mr-1 h-4 w-4" /> Restart session
+          <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void restartSession()}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Restart session
           </Button>
-          <Button onClick={() => navigate('/results')}>View full results</Button>
-          <Button variant="outline" onClick={() => void finishAndReturnToUpload()}>
+          <Button className="rounded-full" onClick={() => navigate('/results')}>View full results</Button>
+          <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void finishAndReturnToUpload()}>
             Send another batch
           </Button>
         </div>
@@ -498,148 +495,124 @@ export default function SendPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl pb-44">
+    <div className="space-y-6 pb-40">
+      <section className="max-w-4xl space-y-4">
+        <p className="frost-pill text-[#ffa057]">Send workflow</p>
+        <h1>Move through each patient with a clean queue and direct send controls.</h1>
+        <p className="max-w-2xl text-lg text-muted-foreground">
+          Copy manually into Messages or send directly through httpSMS, then keep the session state accurate as you go.
+        </p>
+      </section>
+
       {showInstructions && (
-        <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="mb-2 font-medium">How to send each message:</p>
-          <p className="text-muted-foreground">Keep this tab open alongside <strong>messages.google.com</strong> in another tab.</p>
-          <ol className="mt-2 ml-4 list-decimal space-y-1 text-muted-foreground">
-            <li>Tap <strong>Copy Number</strong> → switch to Messages tab → paste into "To:" → Enter</li>
-            <li>Tap <strong>Copy Message</strong> → switch to Messages tab → paste into message field → Send</li>
-            <li>Return here → tap <strong>Mark Sent & Next</strong></li>
+        <div className="frost-panel border-[#3b9eff]/20 bg-[#3b9eff]/5 p-5 text-sm">
+          <p className="font-medium text-foreground">How to send each message</p>
+          <p className="mt-2 text-muted-foreground">Keep this tab open alongside <strong>messages.google.com</strong> in another tab.</p>
+          <ol className="mt-3 ml-4 list-decimal space-y-1 text-muted-foreground">
+            <li>Tap <strong>Copy Number</strong>, switch to Messages, paste into “To:”, then press Enter.</li>
+            <li>Tap <strong>Copy Message</strong>, paste into the message field, then send.</li>
+            <li>Return here and tap <strong>Mark Sent & Next</strong>.</li>
           </ol>
           <button
-            className="mt-3 text-sm font-medium text-primary hover:underline"
+            className="mt-4 text-sm font-medium text-[#3b9eff] hover:underline"
             onClick={() => {
               setShowInstructions(false);
               localStorage.setItem('hughs-instructions-dismissed', 'true');
             }}
           >
-            Got it — don't show again
+            Got it, don&apos;t show again
           </button>
         </div>
       )}
 
-      <div className="mb-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="frost-panel p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-medium text-foreground">{processedCount} of {totalCount} patients processed</p>
             <p className="text-sm text-muted-foreground">{sentCount} sent · {skippedCount} skipped · {pendingCount} pending</p>
           </div>
-          <div className="rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-            Patient {session.currentIndex + 1} of {totalCount}
-          </div>
+          <div className="frost-pill text-muted-foreground">Patient {session.currentIndex + 1} of {totalCount}</div>
         </div>
 
-        <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-border">
-          <div className="h-full bg-success transition-all" style={{ width: `${(sentCount / totalCount) * 100}%` }} />
-          <div className="h-full bg-warning transition-all" style={{ width: `${(skippedCount / totalCount) * 100}%` }} />
-          <div className="h-full bg-muted transition-all" style={{ width: `${(pendingCount / totalCount) * 100}%` }} />
+        <div className="mt-5 flex h-3 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full bg-[#11ff99] transition-all" style={{ width: `${(sentCount / totalCount) * 100}%` }} />
+          <div className="h-full bg-[#ffc53d] transition-all" style={{ width: `${(skippedCount / totalCount) * 100}%` }} />
+          <div className="h-full bg-white/15 transition-all" style={{ width: `${(pendingCount / totalCount) * 100}%` }} />
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
           {currentRecipient && (
-            <div className="rounded-2xl border border-primary/20 bg-card p-6 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="frost-panel p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-primary">Current patient</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Row {currentRecipient.originalRowNumber}</p>
-                  <h2 className="text-2xl font-medium">{currentRecipient.firstName} {currentRecipient.lastName}</h2>
-                  <p className="font-mono text-muted-foreground">{currentRecipient.mobileDisplay}</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#3b9eff]">Current patient</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Row {currentRecipient.originalRowNumber}</p>
+                  <h2 className="mt-2">{currentRecipient.firstName} {currentRecipient.lastName}</h2>
+                  <p className="mt-2 font-mono text-muted-foreground">{currentRecipient.mobileDisplay}</p>
                 </div>
                 <div
-                  className={`rounded-full px-3 py-1 text-sm font-medium ${
+                  className={`frost-pill ${
                     currentRecipient.sendStatus === 'pending'
-                      ? 'bg-muted text-muted-foreground'
+                      ? 'text-muted-foreground'
                       : currentRecipient.sendStatus === 'sent'
-                        ? 'bg-success/10 text-success'
-                        : 'bg-warning/10 text-warning'
+                        ? 'bg-[#11ff99]/10 text-[#11ff99]'
+                        : 'bg-[#ffc53d]/10 text-[#ffc53d]'
                   }`}
                 >
                   {currentRecipient.sendStatus === 'pending' ? 'Pending' : currentRecipient.sendStatus === 'sent' ? 'Sent' : 'Skipped'}
                 </div>
               </div>
 
-              <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Message preview</p>
-                <p className="whitespace-pre-wrap text-sm">{currentRecipient.renderedMessage}</p>
+              <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Message preview</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{currentRecipient.renderedMessage}</p>
               </div>
 
-              <div className="mt-4 space-y-2">
+              <div className="mt-5 space-y-2">
                 <label className="block text-sm font-medium">Patient Mobile Number</label>
                 <Input
                   type="tel"
                   value={currentPatientPhone}
                   placeholder="e.g. 0412 345 678"
-                  className={!currentPatientPhoneValid ? 'border-destructive focus-visible:ring-destructive' : ''}
+                  className={!currentPatientPhoneValid ? 'border-[#ff2047] focus-visible:ring-[#ff2047]' : ''}
                   onChange={(e) => void updateCurrentRecipient({ patientPhoneInput: e.target.value })}
                   onBlur={() => void handlePatientPhoneBlur()}
                 />
-                {!currentPatientPhoneValid && (
-                  <p className="text-sm text-destructive">Please enter a valid Australian mobile number</p>
-                )}
+                {!currentPatientPhoneValid && <p className="text-sm text-[#ff8aa0]">Please enter a valid Australian mobile number</p>}
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <Button className="h-[52px] text-base" onClick={() => copyToClipboard(currentRecipient.mobileForCopy, 'number')}>
-                  {copiedField === 'number' ? (
-                    <>
-                      <Check className="mr-2 h-5 w-5" /> Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Clipboard className="mr-2 h-5 w-5" /> Copy Number{' '}
-                      <kbd className="ml-1.5 rounded border border-current/20 px-1 text-[10px] opacity-50">N</kbd>
-                    </>
-                  )}
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <Button className="h-[52px] rounded-full text-base" onClick={() => copyToClipboard(currentRecipient.mobileForCopy, 'number')}>
+                  {copiedField === 'number' ? <><Check className="mr-2 h-5 w-5" /> Copied!</> : <><Clipboard className="mr-2 h-5 w-5" /> Copy Number</>}
                 </Button>
-                <Button
-                  className="h-[52px] text-base"
-                  onClick={() => copyToClipboard(currentRecipient.renderedMessage, 'message')}
-                  style={copiedField === 'message' ? { backgroundColor: 'hsl(var(--success))' } : undefined}
-                >
-                  {copiedField === 'message' ? (
-                    <>
-                      <Check className="mr-2 h-5 w-5" /> Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Clipboard className="mr-2 h-5 w-5" /> Copy Message{' '}
-                      <kbd className="ml-1.5 rounded border border-current/20 px-1 text-[10px] opacity-50">M</kbd>
-                    </>
-                  )}
+                <Button className="h-[52px] rounded-full text-base" onClick={() => copyToClipboard(currentRecipient.renderedMessage, 'message')}>
+                  {copiedField === 'message' ? <><Check className="mr-2 h-5 w-5" /> Copied!</> : <><Clipboard className="mr-2 h-5 w-5" /> Copy Message</>}
                 </Button>
               </div>
 
               <div className="mt-3">
                 <Button
                   variant="secondary"
-                  className="h-[48px] w-full text-base sm:w-auto"
+                  className="h-[48px] w-full rounded-full border border-white/10 bg-white/5 text-base text-foreground hover:bg-white/10 sm:w-auto"
                   onClick={() => void handleSendSms()}
                   disabled={sendState.status === 'sending' || !httpSmsConfigured}
                   title={!httpSmsConfigured ? 'Configure httpSMS in Settings first' : undefined}
                 >
                   {sendState.status === 'sending' && sendState.recipientId === currentRecipient.id ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…
-                    </>
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</>
                   ) : sendState.status === 'sent' && sendState.recipientId === currentRecipient.id ? (
-                    <>
-                      <Check className="mr-2 h-4 w-4 text-success" /> ✓ Sent!
-                    </>
+                    <><Check className="mr-2 h-4 w-4 text-[#11ff99]" /> Sent!</>
                   ) : (
-                    <>
-                      <SendHorizontal className="mr-2 h-4 w-4" /> Send SMS
-                    </>
+                    <><SendHorizontal className="mr-2 h-4 w-4" /> Send SMS</>
                   )}
                 </Button>
               </div>
 
-              <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <div className="mt-5 space-y-3 border-t border-white/10 pt-5">
                 {!session.complianceAcknowledged && (
-                  <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm">
+                  <label className="flex cursor-pointer items-start gap-2 rounded-2xl border border-[#ffc53d]/30 bg-[#ffc53d]/5 p-4 text-sm">
                     <Checkbox
                       className="mt-0.5"
                       onCheckedChange={(v) => {
@@ -650,19 +623,12 @@ export default function SendPage() {
                   </label>
                 )}
 
-                <div>
-                  <Input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-                </div>
+                <Input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
 
                 {showSkipInput && (
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      placeholder="Reason for skip (optional)"
-                      value={skipReason}
-                      onChange={(e) => setSkipReason(e.target.value)}
-                      className="sm:max-w-xs"
-                    />
-                    <Button variant="outline" onClick={() => void markCurrentPatientSkipped()}>
+                    <Input placeholder="Reason for skip (optional)" value={skipReason} onChange={(e) => setSkipReason(e.target.value)} className="sm:max-w-xs" />
+                    <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void markCurrentPatientSkipped()}>
                       Confirm Skip
                     </Button>
                     <Button variant="ghost" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
@@ -675,11 +641,11 @@ export default function SendPage() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-medium">Queue</h3>
+        <div className="frost-panel p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3>Queue</h3>
             <select
-              className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground outline-none"
               value={queueFilter}
               onChange={(e) => setQueueFilter(e.target.value as QueueFilter)}
             >
@@ -689,52 +655,48 @@ export default function SendPage() {
             </select>
           </div>
 
-          <div className="max-h-[60vh] space-y-1 overflow-y-auto">
-            {filteredRecipients.map((r) => {
-              const realIdx = session.recipients.indexOf(r);
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {filteredRecipients.map((recipient) => {
+              const realIdx = session.recipients.indexOf(recipient);
               const isCurrent = realIdx === session.currentIndex;
               return (
                 <button
-                  key={r.id}
-                  className={`w-full rounded-xl border px-3 py-3 text-left text-sm transition-colors ${
+                  key={recipient.id}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition-colors ${
                     isCurrent
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : r.sendStatus === 'sent'
-                        ? 'border-success/20 bg-success/5 text-foreground/65'
-                        : r.sendStatus === 'skipped'
-                          ? 'border-warning/20 bg-warning/5 text-foreground/80'
-                          : 'border-transparent hover:bg-muted'
+                      ? 'border-white/20 bg-white text-black'
+                      : recipient.sendStatus === 'sent'
+                        ? 'border-[#11ff99]/20 bg-[#11ff99]/5 text-foreground/80'
+                        : recipient.sendStatus === 'skipped'
+                          ? 'border-[#ffc53d]/20 bg-[#ffc53d]/5 text-foreground/85'
+                          : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
                   }`}
                   onClick={() => void navigateToRecipient(realIdx)}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className={`font-medium ${r.sendStatus === 'sent' ? 'line-through' : ''}`}>
-                      {r.firstName} {r.lastName}
+                    <span className={`font-medium ${recipient.sendStatus === 'sent' ? 'line-through' : ''}`}>
+                      {recipient.firstName} {recipient.lastName}
                     </span>
                     <span className="text-xs">
-                      {r.sendStatus === 'sent' && <span className="text-success">✓ Sent</span>}
-                      {r.sendStatus === 'skipped' && <span className="text-warning">Skipped</span>}
-                      {r.sendStatus === 'pending' && <span className="text-muted-foreground">Pending</span>}
+                      {recipient.sendStatus === 'sent' && <span className="text-[#11ff99]">✓ Sent</span>}
+                      {recipient.sendStatus === 'skipped' && <span className="text-[#ffc53d]">Skipped</span>}
+                      {recipient.sendStatus === 'pending' && <span className="text-muted-foreground">Pending</span>}
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                    <UserRound className="h-3 w-3" /> Row {r.originalRowNumber}
+                    <UserRound className="h-3 w-3" /> Row {recipient.originalRowNumber}
                   </div>
                 </button>
               );
             })}
-            {filteredRecipients.length === 0 && (
-              <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                No patients match this filter.
-              </div>
-            )}
+            {filteredRecipients.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-muted-foreground">No patients match this filter.</div>}
           </div>
 
-          <div className="mt-4 space-y-2 border-t border-border pt-3">
-            <Button variant="outline" size="sm" className="w-full" onClick={() => setShowSessionSummary(true)}>
+          <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+            <Button variant="outline" size="sm" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowSessionSummary(true)}>
               View session summary
             </Button>
-            <Button variant="outline" size="sm" className="w-full" onClick={() => void pauseSession()}>
+            <Button variant="outline" size="sm" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void pauseSession()}>
               <Pause className="mr-1 h-3 w-3" /> Pause & save
             </Button>
           </div>
@@ -742,26 +704,20 @@ export default function SendPage() {
       </div>
 
       {sendLog.length > 0 && (
-        <div className="mt-6 rounded-2xl border border-border bg-card">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between px-4 py-3 text-left"
-            onClick={() => setShowSendLog((value) => !value)}
-          >
-            <span className="text-sm font-medium">Today's Sends ({sendLog.filter((entry) => entry.status === 'sent').length})</span>
+        <div className="frost-panel mt-6">
+          <button type="button" className="flex w-full items-center justify-between px-4 py-4 text-left" onClick={() => setShowSendLog((value) => !value)}>
+            <span className="text-sm font-medium">Today&apos;s Sends ({sendLog.filter((entry) => entry.status === 'sent').length})</span>
             {showSendLog ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           {showSendLog && (
-            <div className="border-t border-border px-4 py-3">
+            <div className="border-t border-white/10 px-4 py-4">
               <div className="space-y-2 text-sm">
                 {sendLog.map((entry) => (
-                  <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2">
+                  <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white/[0.03] px-4 py-3">
                     <span className="text-muted-foreground">{entry.timestamp}</span>
                     <span>{entry.maskedPhone}</span>
                     <span className="text-muted-foreground">{entry.templateLabel}</span>
-                    <span className={entry.status === 'sent' ? 'text-success' : 'text-destructive'}>
-                      {entry.status === 'sent' ? 'Sent ✓' : 'Failed ✗'}
-                    </span>
+                    <span className={entry.status === 'sent' ? 'text-[#11ff99]' : 'text-[#ff8aa0]'}>{entry.status === 'sent' ? 'Sent ✓' : 'Failed ✗'}</span>
                   </div>
                 ))}
               </div>
@@ -770,37 +726,37 @@ export default function SendPage() {
         </div>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="section-shell flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">
-              Patient {session.currentIndex + 1} of {totalCount} — {currentRecipient?.firstName} {currentRecipient?.lastName}
+              Patient {session.currentIndex + 1} of {totalCount} , {currentRecipient?.firstName} {currentRecipient?.lastName}
             </p>
             <p className="text-xs text-muted-foreground">Enter = sent, S = skip, Z = undo, ←/→ = move, N = copy number, M = copy message</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => void goToPreviousRecipient()} disabled={session.currentIndex === 0}>
+            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void goToPreviousRecipient()} disabled={session.currentIndex === 0}>
               <ArrowLeft className="mr-1 h-4 w-4" /> Previous
             </Button>
             {!showSkipInput ? (
-              <Button variant="outline" onClick={() => setShowSkipInput(true)} disabled={!currentRecipient || currentRecipient.sendStatus !== 'pending'}>
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowSkipInput(true)} disabled={!currentRecipient || currentRecipient.sendStatus !== 'pending'}>
                 <SkipForward className="mr-1 h-4 w-4" /> Skip
               </Button>
             ) : (
-              <Button variant="outline" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
                 <Undo2 className="mr-1 h-4 w-4" /> Keep Pending
               </Button>
             )}
             {lastAction && (
-              <Button variant="outline" onClick={() => void undoLastAction()}>
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void undoLastAction()}>
                 <Undo2 className="mr-1 h-4 w-4" /> Undo Last
               </Button>
             )}
-            <Button onClick={() => void markCurrentPatientSent()} disabled={!session.complianceAcknowledged || !currentRecipient || currentRecipient.sendStatus !== 'pending'}>
+            <Button className="rounded-full" onClick={() => void markCurrentPatientSent()} disabled={!session.complianceAcknowledged || !currentRecipient || currentRecipient.sendStatus !== 'pending'}>
               <Check className="mr-1 h-4 w-4" /> Mark Sent & Next
             </Button>
-            <Button variant="outline" onClick={() => void goToNextRecipient()} disabled={session.currentIndex >= totalCount - 1}>
+            <Button variant="outline" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void goToNextRecipient()} disabled={session.currentIndex >= totalCount - 1}>
               Next <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
@@ -808,19 +764,19 @@ export default function SendPage() {
       </div>
 
       {fallbackText && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50">
-          <div className="mx-4 w-full max-w-md space-y-4 rounded-2xl bg-card p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md space-y-4 rounded-3xl border border-white/10 bg-black p-6">
             <div className="flex items-center gap-2 text-sm font-medium">
               <AlertCircle className="h-4 w-4" /> Copy this text manually
             </div>
             <textarea
-              className="w-full rounded-lg border border-border p-3 text-sm font-mono"
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm font-mono text-foreground"
               rows={4}
               value={fallbackText}
               readOnly
               onClick={(e) => (e.target as HTMLTextAreaElement).select()}
             />
-            <Button className="w-full" onClick={() => setFallbackText(null)}>
+            <Button className="w-full rounded-full" onClick={() => setFallbackText(null)}>
               Done
             </Button>
           </div>
@@ -832,9 +788,9 @@ export default function SendPage() {
 
 function SummaryStat({ label, value, className }: { label: string; value: number; className: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 text-center">
-      <p className={`text-3xl font-semibold ${className}`}>{value}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+    <div className="frost-panel p-5 text-center">
+      <p className={`text-4xl font-semibold ${className}`}>{value}</p>
+      <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
     </div>
   );
 }
