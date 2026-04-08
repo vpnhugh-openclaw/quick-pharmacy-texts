@@ -27,6 +27,7 @@ interface AppState {
   // Session
   activeSession: SendSession | null;
   setActiveSession: (s: SendSession | null) => void;
+  restoreSessionContext: (session: SendSession) => void;
 
   // Settings
   settings: AppSettings;
@@ -101,6 +102,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   activeSession: null,
   setActiveSession: (s) => set({ activeSession: s }),
+  restoreSessionContext: (session) => set({
+    activeSession: session,
+    fileName: session.sourceFileName,
+    messageTemplate: session.messageBodySnapshot,
+    sessionName: session.sourceFileName.replace(/\.xlsx$/i, ''),
+  }),
 
   settings: loadSettings(),
   setSettings: (s) => {

@@ -9,7 +9,7 @@ import type { SendSession } from '@/types';
 
 export default function UploadPage() {
   const navigate = useNavigate();
-  const { parseResult, setParseResult, settings, fileName } = useAppStore();
+  const { parseResult, setParseResult, settings, fileName, restoreSessionContext } = useAppStore();
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState<SendSession | null>(null);
@@ -55,7 +55,7 @@ export default function UploadPage() {
             </span>
           </div>
           <Button size="sm" onClick={() => {
-            useAppStore.getState().setActiveSession(activeSession);
+            restoreSessionContext(activeSession);
             navigate('/send');
           }}>
             Resume <ArrowRight className="ml-1 h-3 w-3" />
