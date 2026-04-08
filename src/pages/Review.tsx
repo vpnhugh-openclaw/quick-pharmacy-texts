@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,10 +29,11 @@ export default function ReviewPage() {
     });
   }, [recipients, search, hideTexted, hideInvalid, hideDuplicates]);
 
-  if (recipients.length === 0) {
-    navigate('/upload');
-    return null;
-  }
+  useEffect(() => {
+    if (recipients.length === 0) navigate('/upload');
+  }, [recipients.length, navigate]);
+
+  if (recipients.length === 0) return null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">

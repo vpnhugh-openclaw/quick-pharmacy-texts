@@ -1,7 +1,16 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
+let componentTagger: (() => unknown) | null = null;
+
+try {
+  if (process.env.NODE_ENV !== 'production') {
+    const lovableTagger = await import('lovable-tagger');
+    componentTagger = lovableTagger.componentTagger;
+  }
+} catch {
+  componentTagger = null;
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -12,7 +21,7 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [react(), mode === "development" && componentTagger ? componentTagger() : null].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

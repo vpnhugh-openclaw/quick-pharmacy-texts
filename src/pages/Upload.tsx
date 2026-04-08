@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/app-store';
 import { parseSpreadsheet } from '@/lib/spreadsheet';
 import { getActiveSession } from '@/lib/persistence';
-import type { SendSession } from '@/types';
+import type { ImportedRecipient, SendSession } from '@/types';
 
 export default function UploadPage() {
   const navigate = useNavigate();
@@ -179,7 +179,7 @@ function StatChip({ icon: Icon, iconClass, label, value }: { icon: any; iconClas
   );
 }
 
-function StatusChip({ recipient }: { recipient: any }) {
+function StatusChip({ recipient }: { recipient: ImportedRecipient }) {
   if (recipient.isAlreadyTexted) return <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Already Texted</span>;
   if (!recipient.isValidMobile) return <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">Invalid</span>;
   if (recipient.isDuplicate) return <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs text-warning">Duplicate</span>;

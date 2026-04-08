@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "@/components/Layout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import UploadPage from "@/pages/Upload";
 import ReviewPage from "@/pages/Review";
 import MessageBuilderPage from "@/pages/MessageBuilder";
@@ -19,20 +20,22 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Navigate to="/upload" replace />} />
-            <Route path="/upload" element={<UploadPage />} />
-            <Route path="/review" element={<ReviewPage />} />
-            <Route path="/message" element={<MessageBuilderPage />} />
-            <Route path="/send" element={<SendPage />} />
-            <Route path="/results" element={<ResultsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Layout>
-      </BrowserRouter>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Navigate to="/upload" replace />} />
+              <Route path="/upload" element={<UploadPage />} />
+              <Route path="/review" element={<ReviewPage />} />
+              <Route path="/message" element={<MessageBuilderPage />} />
+              <Route path="/send" element={<SendPage />} />
+              <Route path="/results" element={<ResultsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Layout>
+        </BrowserRouter>
+      </ErrorBoundary>
     </TooltipProvider>
   </QueryClientProvider>
 );

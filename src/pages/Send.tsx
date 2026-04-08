@@ -1,13 +1,22 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clipboard, Check, SkipForward, Undo2, Pause, ArrowLeft, ArrowRight, UserRound, AlertCircle } from 'lucide-react';
+import { Clipboard, Check, SkipForward, Undo2, Pause, ArrowLeft, ArrowRight, UserRound, AlertCircle, RotateCcw, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/store/app-store';
 import { renderMessage, generateId } from '@/lib/sms-utils';
-import { getActiveSession, saveSession } from '@/lib/persistence';
+import { deleteSession, getActiveSession, saveSession } from '@/lib/persistence';
 import type { SendSession, SendSessionRecipient } from '@/types';
+
+interface LastActionState {
+  recipientIndex: number;
+  previousRecipient: SendSessionRecipient;
+  previousCurrentIndex: number;
+  previousStatus: SendSession['status'];
+}
+
+type QueueFilter = 'all' | 'pending' | 'skipped';
 
 export default function SendPage() {
   const navigate = useNavigate();
@@ -16,9 +25,11 @@ export default function SendPage() {
   const [showSkipInput, setShowSkipInput] = useState(false);
   const [skipReason, setSkipReason] = useState('');
   const [note, setNote] = useState('');
-  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>('all');
   const [fallbackText, setFallbackText] = useState<string | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
+  const [showSessionSummary, setShowSessionSummary] = useState(false);
+  const [lastAction, setLastAction] = useState<LastActionState | null>(null);
   const instructionsDismissed = localStorage.getItem('hughs-instructions-dismissed') === 'true';
   const [showInstructions, setShowInstructions] = useState(!instructionsDismissed);
 
@@ -118,61 +129,44 @@ export default function SendPage() {
     setNote('');
   };
 
-  const markCurrentPatientSent = useCallback(async () => {
-    if (!session) return;
+  const updateCurrentPatientState = useCallback(
+    async (nextStatus: 'sent' | 'skipped') => {
+      if (!session) return;
 
-    const currentRecipient = session.recipients[session.currentIndex];
-    if (!currentRecipient) return;
+      const currentRecipient = session.recipients[session.currentIndex];
+      if (!currentRecipient || currentRecipient.sendStatus !== 'pending') return;
 
-    const nextRecipients = [...session.recipients];
-    const alreadySent = currentRecipient.sendStatus === 'sent';
+      const nextRecipients = [...session.recipients];
+      setLastAction({
+        recipientIndex: session.currentIndex,
+        previousRecipient: currentRecipient,
+        previousCurrentIndex: session.currentIndex,
+        previousStatus: session.status,
+      });
 
-    nextRecipients[session.currentIndex] = {
-      ...currentRecipient,
-      notes: note || currentRecipient.notes,
-      sendStatus: alreadySent ? currentRecipient.sendStatus : 'sent',
-      sentAt: currentRecipient.sentAt || new Date().toISOString(),
-      skipReason: alreadySent ? currentRecipient.skipReason : null,
-    };
+      nextRecipients[session.currentIndex] = {
+        ...currentRecipient,
+        notes: note || currentRecipient.notes,
+        sendStatus: nextStatus,
+        sentAt: nextStatus === 'sent' ? currentRecipient.sentAt || new Date().toISOString() : null,
+        skipReason: nextStatus === 'skipped' ? skipReason || currentRecipient.skipReason : null,
+      };
 
-    const nextPendingIndex = getNextPendingIndex(nextRecipients, session.currentIndex);
-    const status = nextPendingIndex === -1 ? 'completed' : session.status === 'paused' ? 'in_progress' : session.status;
+      const nextPendingIndex = getNextPendingIndex(nextRecipients, session.currentIndex);
+      const status = nextPendingIndex === -1 ? 'completed' : session.status === 'paused' ? 'in_progress' : session.status;
 
-    await updateRecipients(nextRecipients, {
-      currentIndex: nextPendingIndex === -1 ? session.currentIndex : nextPendingIndex,
-      status,
-    });
+      await updateRecipients(nextRecipients, {
+        currentIndex: nextPendingIndex === -1 ? session.currentIndex : nextPendingIndex,
+        status,
+      });
 
-    resetInlineState();
-  }, [session, note, getNextPendingIndex, updateRecipients]);
+      resetInlineState();
+    },
+    [session, note, skipReason, getNextPendingIndex, updateRecipients]
+  );
 
-  const markCurrentPatientSkipped = useCallback(async () => {
-    if (!session) return;
-
-    const currentRecipient = session.recipients[session.currentIndex];
-    if (!currentRecipient) return;
-
-    const nextRecipients = [...session.recipients];
-    const alreadySkipped = currentRecipient.sendStatus === 'skipped';
-
-    nextRecipients[session.currentIndex] = {
-      ...currentRecipient,
-      notes: note || currentRecipient.notes,
-      sendStatus: alreadySkipped ? currentRecipient.sendStatus : 'skipped',
-      skipReason: skipReason || currentRecipient.skipReason,
-      sentAt: alreadySkipped ? currentRecipient.sentAt : null,
-    };
-
-    const nextPendingIndex = getNextPendingIndex(nextRecipients, session.currentIndex);
-    const status = nextPendingIndex === -1 ? 'completed' : session.status === 'paused' ? 'in_progress' : session.status;
-
-    await updateRecipients(nextRecipients, {
-      currentIndex: nextPendingIndex === -1 ? session.currentIndex : nextPendingIndex,
-      status,
-    });
-
-    resetInlineState();
-  }, [session, note, skipReason, getNextPendingIndex, updateRecipients]);
+  const markCurrentPatientSent = useCallback(async () => updateCurrentPatientState('sent'), [updateCurrentPatientState]);
+  const markCurrentPatientSkipped = useCallback(async () => updateCurrentPatientState('skipped'), [updateCurrentPatientState]);
 
   const navigateToRecipient = useCallback(
     async (index: number) => {
@@ -194,6 +188,46 @@ export default function SendPage() {
     await navigateToRecipient(nextIndex);
   }, [session, navigateToRecipient]);
 
+  const undoLastAction = useCallback(async () => {
+    if (!session || !lastAction) return;
+
+    const nextRecipients = [...session.recipients];
+    nextRecipients[lastAction.recipientIndex] = lastAction.previousRecipient;
+
+    await updateRecipients(nextRecipients, {
+      currentIndex: lastAction.previousCurrentIndex,
+      status: lastAction.previousStatus === 'completed' ? 'in_progress' : lastAction.previousStatus,
+    });
+
+    setLastAction(null);
+    setShowSessionSummary(false);
+  }, [session, lastAction, updateRecipients]);
+
+  const restartSession = useCallback(async () => {
+    if (!session) return;
+    const confirmed = window.confirm('Clear sent and skipped statuses and restart this session?');
+    if (!confirmed) return;
+
+    const resetRecipients = session.recipients.map((recipient) => ({
+      ...recipient,
+      sendStatus: 'pending' as const,
+      sentAt: null,
+      skipReason: null,
+      notes: '',
+    }));
+
+    setLastAction(null);
+    setShowSessionSummary(false);
+    await updateRecipients(resetRecipients, { currentIndex: 0, status: 'in_progress' });
+  }, [session, updateRecipients]);
+
+  const finishAndReturnToUpload = useCallback(async () => {
+    if (!session) return;
+    await deleteSession(session.id);
+    setActiveSession(null);
+    navigate('/upload');
+  }, [session, setActiveSession, navigate]);
+
   const actionsRef = useRef<{
     markSent: () => void;
     markSkipped: () => void;
@@ -201,6 +235,7 @@ export default function SendPage() {
     copyMessage: () => void;
     previous: () => void;
     next: () => void;
+    undo: () => void;
   } | null>(null);
 
   useEffect(() => {
@@ -251,6 +286,9 @@ export default function SendPage() {
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         actionsRef.current.next();
+      } else if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        actionsRef.current.undo();
       }
     };
 
@@ -275,6 +313,11 @@ export default function SendPage() {
   const processedCount = sentCount + skippedCount;
   const totalCount = session.recipients.length;
   const isComplete = pendingCount === 0 || session.status === 'completed';
+  const filteredRecipients = session.recipients.filter((recipient) => {
+    if (queueFilter === 'pending') return recipient.sendStatus === 'pending';
+    if (queueFilter === 'skipped') return recipient.sendStatus === 'skipped';
+    return true;
+  });
 
   const copyToClipboard = async (text: string, field: 'number' | 'message') => {
     try {
@@ -298,25 +341,62 @@ export default function SendPage() {
     copyMessage: () => currentRecipient && void copyToClipboard(currentRecipient.renderedMessage, 'message'),
     previous: () => void goToPreviousRecipient(),
     next: () => void goToNextRecipient(),
+    undo: () => void undoLastAction(),
   };
 
-  if (isComplete) {
+  if (isComplete || showSessionSummary) {
     return (
-      <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
-        <div className="rounded-2xl border border-border bg-card p-8">
-          <h2 className="mb-2 text-2xl font-medium">Session complete</h2>
-          <p className="text-muted-foreground">{sentCount} sent · {skippedCount} skipped</p>
+      <div className="mx-auto max-w-3xl space-y-6 py-12">
+        <div className="rounded-2xl border border-border bg-card p-8 text-center">
+          <h2 className="mb-2 text-2xl font-medium">{isComplete ? 'Session complete' : 'Session summary'}</h2>
+          <p className="text-muted-foreground">{sentCount} sent · {skippedCount} skipped · {pendingCount} pending</p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Button onClick={() => navigate('/results')}>View Full Results</Button>
-          <Button variant="outline" onClick={() => navigate('/results')}>Download Updated Spreadsheet</Button>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <SummaryStat label="Sent" value={sentCount} className="text-success" />
+          <SummaryStat label="Skipped" value={skippedCount} className="text-warning" />
+          <SummaryStat label="Pending" value={pendingCount} className="text-muted-foreground" />
+        </div>
+
+        {skippedCount > 0 && (
+          <div className="rounded-2xl border border-warning/20 bg-warning/5 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-medium text-foreground">Skipped patients</h3>
+                <p className="text-sm text-muted-foreground">Review and return to these patients if needed.</p>
+              </div>
+              <Button variant="outline" onClick={() => { setQueueFilter('skipped'); setShowSessionSummary(false); }}>
+                <Filter className="mr-1 h-4 w-4" /> Review skipped
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3">
+          {lastAction && (
+            <Button variant="outline" onClick={() => void undoLastAction()}>
+              <Undo2 className="mr-1 h-4 w-4" /> Undo last
+            </Button>
+          )}
+          {pendingCount > 0 && (
+            <Button variant="outline" onClick={() => setShowSessionSummary(false)}>
+              Return to session
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => void restartSession()}>
+            <RotateCcw className="mr-1 h-4 w-4" /> Restart session
+          </Button>
+          <Button onClick={() => navigate('/results')}>View full results</Button>
+          <Button variant="outline" onClick={() => void finishAndReturnToUpload()}>
+            Send another batch
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl pb-40">
+    <div className="mx-auto max-w-6xl pb-44">
       {showInstructions && (
         <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm">
           <p className="mb-2 font-medium">How to send each message:</p>
@@ -349,7 +429,7 @@ export default function SendPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid h-3 grid-cols-3 overflow-hidden rounded-full bg-border">
+        <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-border">
           <div className="h-full bg-success transition-all" style={{ width: `${(sentCount / totalCount) * 100}%` }} />
           <div className="h-full bg-warning transition-all" style={{ width: `${(skippedCount / totalCount) * 100}%` }} />
           <div className="h-full bg-muted transition-all" style={{ width: `${(pendingCount / totalCount) * 100}%` }} />
@@ -367,7 +447,13 @@ export default function SendPage() {
                   <h2 className="text-2xl font-medium">{currentRecipient.firstName} {currentRecipient.lastName}</h2>
                   <p className="font-mono text-muted-foreground">{currentRecipient.mobileDisplay}</p>
                 </div>
-                <div className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                <div className={`rounded-full px-3 py-1 text-sm font-medium ${
+                  currentRecipient.sendStatus === 'pending'
+                    ? 'bg-muted text-muted-foreground'
+                    : currentRecipient.sendStatus === 'sent'
+                      ? 'bg-success/10 text-success'
+                      : 'bg-warning/10 text-warning'
+                }`}>
                   {currentRecipient.sendStatus === 'pending' ? 'Pending' : currentRecipient.sendStatus === 'sent' ? 'Sent' : 'Skipped'}
                 </div>
               </div>
@@ -418,49 +504,60 @@ export default function SendPage() {
         <div className="rounded-2xl border border-border bg-card p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="text-sm font-medium">Queue</h3>
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs">
-              <Checkbox checked={showPendingOnly} onCheckedChange={(v) => setShowPendingOnly(!!v)} />
-              Pending only
-            </label>
+            <select
+              className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
+              value={queueFilter}
+              onChange={(e) => setQueueFilter(e.target.value as QueueFilter)}
+            >
+              <option value="all">All patients</option>
+              <option value="pending">Pending only</option>
+              <option value="skipped">Skipped only</option>
+            </select>
           </div>
 
           <div className="max-h-[60vh] space-y-1 overflow-y-auto">
-            {session.recipients
-              .filter((r) => !showPendingOnly || r.sendStatus === 'pending')
-              .map((r) => {
-                const realIdx = session.recipients.indexOf(r);
-                const isCurrent = realIdx === session.currentIndex;
-                return (
-                  <button
-                    key={r.id}
-                    className={`w-full rounded-xl border px-3 py-3 text-left text-sm transition-colors ${
-                      isCurrent
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : r.sendStatus === 'sent'
-                          ? 'border-success/20 bg-success/5 text-foreground/70'
-                          : r.sendStatus === 'skipped'
-                            ? 'border-warning/20 bg-warning/5 text-foreground/80'
-                            : 'border-transparent hover:bg-muted'
-                    }`}
-                    onClick={() => void navigateToRecipient(realIdx)}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium">{r.firstName} {r.lastName}</span>
-                      <span className="text-xs">
-                        {r.sendStatus === 'sent' && <span className="text-success">✓ Sent</span>}
-                        {r.sendStatus === 'skipped' && <span className="text-warning">Skipped</span>}
-                        {r.sendStatus === 'pending' && <span className="text-muted-foreground">Pending</span>}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      <UserRound className="h-3 w-3" /> Row {r.originalRowNumber}
-                    </div>
-                  </button>
-                );
-              })}
+            {filteredRecipients.map((r) => {
+              const realIdx = session.recipients.indexOf(r);
+              const isCurrent = realIdx === session.currentIndex;
+              return (
+                <button
+                  key={r.id}
+                  className={`w-full rounded-xl border px-3 py-3 text-left text-sm transition-colors ${
+                    isCurrent
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : r.sendStatus === 'sent'
+                        ? 'border-success/20 bg-success/5 text-foreground/65'
+                        : r.sendStatus === 'skipped'
+                          ? 'border-warning/20 bg-warning/5 text-foreground/80'
+                          : 'border-transparent hover:bg-muted'
+                  }`}
+                  onClick={() => void navigateToRecipient(realIdx)}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`font-medium ${r.sendStatus === 'sent' ? 'line-through' : ''}`}>{r.firstName} {r.lastName}</span>
+                    <span className="text-xs">
+                      {r.sendStatus === 'sent' && <span className="text-success">✓ Sent</span>}
+                      {r.sendStatus === 'skipped' && <span className="text-warning">Skipped</span>}
+                      {r.sendStatus === 'pending' && <span className="text-muted-foreground">Pending</span>}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <UserRound className="h-3 w-3" /> Row {r.originalRowNumber}
+                  </div>
+                </button>
+              );
+            })}
+            {filteredRecipients.length === 0 && (
+              <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                No patients match this filter.
+              </div>
+            )}
           </div>
 
-          <div className="mt-4 border-t border-border pt-3">
+          <div className="mt-4 border-t border-border pt-3 space-y-2">
+            <Button variant="outline" size="sm" className="w-full" onClick={() => setShowSessionSummary(true)}>
+              View session summary
+            </Button>
             <Button variant="outline" size="sm" className="w-full" onClick={() => void pauseSession()}>
               <Pause className="mr-1 h-3 w-3" /> Pause & save
             </Button>
@@ -472,7 +569,7 @@ export default function SendPage() {
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">Patient {session.currentIndex + 1} of {totalCount} — {currentRecipient?.firstName} {currentRecipient?.lastName}</p>
-            <p className="text-xs text-muted-foreground">Enter = mark sent, S = skip, ←/→ = move, N = copy number, M = copy message</p>
+            <p className="text-xs text-muted-foreground">Enter = sent, S = skip, Z = undo, ←/→ = move, N = copy number, M = copy message</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -486,6 +583,11 @@ export default function SendPage() {
             ) : (
               <Button variant="outline" onClick={() => { setShowSkipInput(false); setSkipReason(''); }}>
                 <Undo2 className="mr-1 h-4 w-4" /> Keep Pending
+              </Button>
+            )}
+            {lastAction && (
+              <Button variant="outline" onClick={() => void undoLastAction()}>
+                <Undo2 className="mr-1 h-4 w-4" /> Undo Last
               </Button>
             )}
             <Button onClick={() => void markCurrentPatientSent()} disabled={!session.complianceAcknowledged || !currentRecipient || currentRecipient.sendStatus !== 'pending'}>
@@ -509,6 +611,15 @@ export default function SendPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, className }: { label: string; value: number; className: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 text-center">
+      <p className={`text-3xl font-semibold ${className}`}>{value}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{label}</p>
     </div>
   );
 }
