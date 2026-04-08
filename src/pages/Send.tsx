@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clipboard, Check, SkipForward, Undo2, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
