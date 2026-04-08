@@ -41,6 +41,15 @@ export interface SendSessionRecipient {
   sentAt: string | null;
   skipReason: string | null;
   notes: string;
+  patientPhoneInput?: string;
+}
+
+export interface SendLogEntry {
+  id: string;
+  timestamp: string;
+  maskedPhone: string;
+  templateLabel: string;
+  status: 'sent' | 'failed';
 }
 
 export interface AppSettings {

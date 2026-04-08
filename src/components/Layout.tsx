@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Upload, Send, BarChart3, Settings } from 'lucide-react';
+import { Upload, Send, BarChart3, Settings, ShieldCheck } from 'lucide-react';
 
 const navItems = [
   { to: '/upload', label: 'Upload', icon: Upload },
@@ -7,6 +7,8 @@ const navItems = [
   { to: '/results', label: 'Results', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
+
+const httpSmsConfigured = Boolean(localStorage.getItem('httpsms_api_key') && localStorage.getItem('httpsms_from_number'));
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -19,6 +21,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             Hugh's Pharmacy Text Messager
           </Link>
           <nav className="flex items-center gap-1">
+            <Link
+              to="/settings"
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                location.pathname.startsWith('/settings') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+              aria-label="Open settings"
+            >
+              {httpSmsConfigured ? <ShieldCheck className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
+              <span className="hidden sm:inline">Settings</span>
+            </Link>
             {navItems.map(item => {
               const active = location.pathname.startsWith(item.to);
               return (
