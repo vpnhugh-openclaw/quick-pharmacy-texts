@@ -104,6 +104,14 @@ export default function SendPage() {
     if (!session || session.status === 'completed') return;
 
     const handler = (e: KeyboardEvent) => {
+      // Escape always works, even in inputs
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (fallbackText) { setFallbackText(null); return; }
+        if (showSkipInput) { setShowSkipInput(false); setSkipReason(''); return; }
+        return;
+      }
+
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (!actionsRef.current) return;
