@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Satoshi', 'system-ui', 'sans-serif'],
-        display: ['Instrument Serif', 'serif'],
+        sans: ['Canto', 'system-ui', 'sans-serif'],
+        display: ['Canto', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
