@@ -79,7 +79,7 @@ export default function HttpSmsSetupGuide({ open, onOpenChange, onOpenSettings }
                           <span>{step.actionLabel}</span>
                           <ExternalLink className="h-4 w-4" />
                         </a>
-                        {step.note ? <p className="mt-2 text-xs text-slate-400">{step.note}</p> : null}
+                        {'note' in step && step.note ? <p className="mt-2 text-xs text-slate-400">{step.note}</p> : null}
                       </div>
                     ) : (
                       <div className="mt-4">
