@@ -1,10 +1,4 @@
-@font-face {
-  font-family: 'Canto';
-  src: url('/fonts/Canto-Roman.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -60,7 +54,7 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Canto', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
     background:
       radial-gradient(circle at top, rgba(255, 128, 31, 0.12), transparent 28%),
       radial-gradient(circle at 20% 20%, rgba(59, 158, 255, 0.1), transparent 26%),
