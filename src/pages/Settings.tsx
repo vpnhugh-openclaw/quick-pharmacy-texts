@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Eye, EyeOff, Loader2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, Eye, EyeOff, Loader2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,11 @@ export default function SettingsPage() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [testStatus, setTestStatus] = useState<{ state: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ state: 'idle', message: '' });
+
+  const trimmedApiKey = sanitiseApiKey(apiKey);
+  const normalisedFromNumber = toE164AU(fromNumberInput);
+  const hasLikelyPhoneApiKey = trimmedApiKey.toLowerCase().includes('phone');
+  const canAttemptTest = Boolean(trimmedApiKey && isValidAUMobile(normalisedFromNumber));
 
   const formattedFromNumber = useMemo(() => {
     if (!fromNumberInput) return '';
@@ -55,8 +60,7 @@ export default function SettingsPage() {
   };
 
   const handleTestConnection = async () => {
-    const trimmedApiKey = sanitiseApiKey(apiKey);
-    const from = toE164AU(fromNumberInput);
+    const from = normalisedFromNumber;
 
     if (!trimmedApiKey || !isValidAUMobile(from)) {
       setTestStatus({ state: 'error', message: 'Enter a valid API key and registered mobile number' });
@@ -114,6 +118,23 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
+          <div className="md:col-span-2 rounded-3xl border border-[#f59e0b]/25 bg-[#f59e0b]/10 p-4 text-sm text-[#fde68a]">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#fbbf24]" />
+              <div className="space-y-2">
+                <p className="font-medium text-[#fef3c7]">Use the account API key, not a phone API key.</p>
+                <p>
+                  The key for this form must come from <span className="font-semibold text-white">httpsms.com/settings</span>. The phone API key page is only for logging the Android app in.
+                </p>
+                <p>
+                  The Android app should be signed into the <span className="font-semibold text-white">same httpSMS account</span> that owns the API key you paste here, and the phone number below must be that same Android handset.
+                </p>
+                {hasLikelyPhoneApiKey ? (
+                  <p className="font-medium text-[#fca5a5]">This key looks like it might be a phone API key. Please copy the account API key from Settings instead.</p>
+                ) : null}
+              </div>
+            </div>
+          </div>
           <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-medium text-foreground">httpSMS API Key</label>
             <div className="flex gap-2">
@@ -149,15 +170,18 @@ export default function SettingsPage() {
               onChange={(e) => setFromNumberInput(e.target.value)}
               onBlur={handleFromNumberBlur}
             />
-            <p className="text-xs text-muted-foreground">The number registered in the httpSMS app on your Android phone</p>
+            <p className="text-xs text-muted-foreground">The number registered in the httpSMS app on your Android phone, signed into the same httpSMS account as the API key above</p>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Connection test</label>
-            <Button data-testid="settings-test-connection" variant="outline" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleTestConnection()} disabled={testStatus.state === 'loading'}>
+            <Button data-testid="settings-test-connection" variant="outline" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleTestConnection()} disabled={testStatus.state === 'loading' || !canAttemptTest}>
               {testStatus.state === 'loading' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Test Connection
             </Button>
+            {!canAttemptTest && (
+              <p className="text-xs text-muted-foreground">Add your account API key and a valid Android mobile number to test the connection.</p>
+            )}
             {testStatus.state !== 'idle' && (
               <p className={`text-sm ${testStatus.state === 'success' ? 'text-[#11ff99]' : testStatus.state === 'error' ? 'text-[#ff8aa0]' : 'text-muted-foreground'}`}>
                 {testStatus.message}

@@ -27,15 +27,15 @@ const steps = [
   },
   {
     number: 3,
-    heading: 'Copy your API key from httpSMS',
-    body: 'In httpSMS, go to Settings and copy your API key. This is the password that lets this app talk to your phone. Keep it private.',
+    heading: 'Copy your account API key from httpSMS Settings',
+    body: 'In httpSMS, go to Settings and copy the main account API key. Do not use a phone API key here, that one is only for logging the Android app into httpSMS.',
     actionLabel: 'Open httpSMS Settings →',
     href: 'https://httpsms.com/settings',
   },
   {
     number: 4,
     heading: 'Paste your details here',
-    body: 'Go to Settings (the gear icon ⚙ at the top of this app), paste your API key, and enter the mobile number of the phone that has the httpSMS app installed. Hit Save, you are done.',
+    body: 'Go to Settings (the gear icon ⚙ at the top of this app), paste your account API key, and enter the mobile number of the Android phone that has the httpSMS app installed and signed into the same account. Then run the connection test.',
     actionLabel: 'Open Settings ⚙',
   },
 ] as const;
