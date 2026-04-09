@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Upload, Send, BarChart3, Settings, ShieldCheck } from 'lucide-react';
+import { sanitiseApiKey } from '@/services/httpsms';
 
 const navItems = [
   { to: '/upload', label: 'Upload', icon: Upload },
@@ -9,7 +10,7 @@ const navItems = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const httpSmsConfigured = Boolean(localStorage.getItem('httpsms_api_key') && localStorage.getItem('httpsms_from_number'));
+  const httpSmsConfigured = Boolean(sanitiseApiKey(localStorage.getItem('httpsms_api_key') ?? '') && (localStorage.getItem('httpsms_from_number') ?? '').trim());
 
   return (
     <div className="min-h-screen bg-background text-foreground">

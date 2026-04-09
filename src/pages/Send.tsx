@@ -24,7 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/store/app-store';
 import { renderMessage, generateId } from '@/lib/sms-utils';
 import { deleteSession, getActiveSession, saveSession } from '@/lib/persistence';
-import { isValidAUMobile, sendSMS, toE164AU } from '@/services/httpsms';
+import { isValidAUMobile, sanitiseApiKey, sendSMS, toE164AU } from '@/services/httpsms';
 import type { SendLogEntry, SendSession, SendSessionRecipient } from '@/types';
 
 interface LastActionState {
@@ -382,7 +382,7 @@ export default function SendPage() {
     if (queueFilter === 'skipped') return recipient.sendStatus === 'skipped';
     return true;
   });
-  const httpSmsConfigured = Boolean(localStorage.getItem(HTTPSMS_API_KEY_STORAGE) && localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE));
+  const httpSmsConfigured = Boolean(sanitiseApiKey(localStorage.getItem(HTTPSMS_API_KEY_STORAGE) ?? '') && (localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE) ?? '').trim());
   const currentPatientPhone = currentRecipient?.patientPhoneInput || currentRecipient?.mobileDisplay || '';
   const currentPatientPhoneValid = isValidAUMobile(toE164AU(currentPatientPhone));
 
@@ -423,8 +423,8 @@ export default function SendPage() {
   const handleSendSms = async () => {
     if (!currentRecipient || !httpSmsConfigured) return;
 
-    const apiKey = localStorage.getItem(HTTPSMS_API_KEY_STORAGE) ?? '';
-    const from = localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE) ?? '';
+    const apiKey = sanitiseApiKey(localStorage.getItem(HTTPSMS_API_KEY_STORAGE) ?? '');
+    const from = (localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE) ?? '').trim();
     const to = toE164AU(currentPatientPhone);
 
     if (!currentPatientPhoneValid) {

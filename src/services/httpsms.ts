@@ -16,6 +16,10 @@ interface SendSMSParams {
   content: string;
 }
 
+export function sanitiseApiKey(apiKey: string): string {
+  return apiKey.trim();
+}
+
 export function toE164AU(phoneNumber: string): string {
   const digits = phoneNumber.replace(/[^\d+]/g, '');
 
@@ -32,7 +36,7 @@ export function isValidAUMobile(phoneNumber: string): boolean {
 }
 
 function mapErrorMessage(status: number, fallback?: string): string {
-  if (status === 401) return 'Invalid API key — check Settings';
+  if (status === 401) return 'Invalid API key. Paste the account API key from httpsms.com/settings, not a phone API key.';
   if (status === 422) return 'Invalid phone number or message format';
   if (status === 500) return 'httpSMS server error — try again';
   return fallback || 'Unable to send SMS';
@@ -42,15 +46,20 @@ export async function sendSMS(
   params: SendSMSParams
 ): Promise<{ success: true; messageId: string } | { success: false; error: string }> {
   try {
+    const apiKey = sanitiseApiKey(params.apiKey);
+    const from = toE164AU(params.from.trim());
+    const to = toE164AU(params.to.trim());
+
     const response = await fetch(HTTPSMS_API_URL, {
       method: 'POST',
       headers: {
+        Accept: 'application/json',
         'Content-Type': 'application/json',
-        'x-api-Key': params.apiKey,
+        'x-api-key': apiKey,
       },
       body: JSON.stringify({
-        from: params.from,
-        to: params.to,
+        from,
+        to,
         content: params.content,
       }),
     });

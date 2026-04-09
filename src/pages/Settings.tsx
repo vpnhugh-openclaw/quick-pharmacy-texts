@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import HttpSmsSetupGuide from '@/components/HttpSmsSetupGuide';
 import { useAppStore } from '@/store/app-store';
 import { normaliseAustralianMobile } from '@/lib/sms-utils';
-import { isValidAUMobile, testConnection, toE164AU } from '@/services/httpsms';
+import { isValidAUMobile, sanitiseApiKey, testConnection, toE164AU } from '@/services/httpsms';
 
 const HTTPSMS_API_KEY_STORAGE = 'httpsms_api_key';
 const HTTPSMS_FROM_NUMBER_STORAGE = 'httpsms_from_number';
@@ -36,8 +36,8 @@ export default function SettingsPage() {
   };
 
   const persistHttpSmsSettings = (nextApiKey: string, nextFromNumber: string) => {
-    localStorage.setItem(HTTPSMS_API_KEY_STORAGE, nextApiKey);
-    localStorage.setItem(HTTPSMS_FROM_NUMBER_STORAGE, nextFromNumber);
+    localStorage.setItem(HTTPSMS_API_KEY_STORAGE, sanitiseApiKey(nextApiKey));
+    localStorage.setItem(HTTPSMS_FROM_NUMBER_STORAGE, nextFromNumber.trim());
   };
 
   const handleFromNumberBlur = () => {
@@ -55,17 +55,22 @@ export default function SettingsPage() {
   };
 
   const handleTestConnection = async () => {
+    const trimmedApiKey = sanitiseApiKey(apiKey);
     const from = toE164AU(fromNumberInput);
-    if (!apiKey || !isValidAUMobile(from)) {
+
+    if (!trimmedApiKey || !isValidAUMobile(from)) {
       setTestStatus({ state: 'error', message: 'Enter a valid API key and registered mobile number' });
       return;
     }
 
     setTestStatus({ state: 'loading', message: 'Sending test…' });
-    const result = await testConnection({ apiKey, from });
+    const result = await testConnection({ apiKey: trimmedApiKey, from });
+
     if (result.success) {
       setTestStatus({ state: 'success', message: '✓ Test SMS sent' });
-      persistHttpSmsSettings(apiKey, from);
+      setApiKey(trimmedApiKey);
+      setFromNumberInput(from);
+      persistHttpSmsSettings(trimmedApiKey, from);
       return;
     }
 
@@ -122,6 +127,7 @@ export default function SettingsPage() {
                   setApiKey(value);
                   persistHttpSmsSettings(value, fromNumberInput);
                 }}
+                onBlur={() => setApiKey((current) => sanitiseApiKey(current))}
               />
               <Button data-testid="settings-toggle-api-key" variant="outline" size="icon" type="button" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowApiKey((value) => !value)}>
                 {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
