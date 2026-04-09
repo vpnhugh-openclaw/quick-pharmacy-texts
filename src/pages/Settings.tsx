@@ -183,9 +183,22 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">Add your account API key and a valid Android mobile number to test the connection.</p>
             )}
             {testStatus.state !== 'idle' && (
-              <p className={`text-sm ${testStatus.state === 'success' ? 'text-[#11ff99]' : testStatus.state === 'error' ? 'text-[#ff8aa0]' : 'text-muted-foreground'}`}>
-                {testStatus.message}
-              </p>
+              <div className="space-y-3">
+                <p className={`text-sm ${testStatus.state === 'success' ? 'text-[#11ff99]' : testStatus.state === 'error' ? 'text-[#ff8aa0]' : 'text-muted-foreground'}`}>
+                  {testStatus.message}
+                </p>
+                {testStatus.state === 'error' && (
+                  <div className="rounded-2xl border border-[#ff8aa0]/20 bg-[#ff8aa0]/5 p-3 text-xs text-[#ffd5de]">
+                    <p className="font-medium text-white">Common fixes</p>
+                    <ul className="mt-2 ml-4 list-disc space-y-1">
+                      <li>Re-copy the account API key from httpsms.com/settings</li>
+                      <li>Do not use a phone API key from the phone API keys page</li>
+                      <li>Make sure the Android app is signed into the same httpSMS account</li>
+                      <li>Check the phone number here matches the Android handset running httpSMS</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
