@@ -24,7 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/store/app-store';
 import { renderMessage, generateId } from '@/lib/sms-utils';
 import { deleteSession, getActiveSession, saveSession } from '@/lib/persistence';
-import { isValidAUMobile, sendSMS, toE164AU } from '@/services/httpsms';
+import { isValidAUMobile, sanitiseApiKey, sendSMS, toE164AU } from '@/services/httpsms';
 import type { SendLogEntry, SendSession, SendSessionRecipient } from '@/types';
 
 interface LastActionState {
@@ -260,37 +260,34 @@ export default function SendPage() {
     if (!session) return;
 
     const label = queueFilter === 'all' ? 'entire queue' : queueFilter === 'pending' ? 'pending queue' : 'skipped queue';
-    const confirmed = window.confirm(`Clear the ${label} and reset those patients back to pending?`);
+    const confirmed = window.confirm(`Clear the ${label} from this session?`);
     if (!confirmed) return;
 
-    const resetRecipients = session.recipients.map((recipient) => {
-      const matchesFilter = queueFilter === 'all'
-        ? true
-        : queueFilter === 'pending'
-          ? recipient.sendStatus === 'pending'
-          : recipient.sendStatus === 'skipped';
-
-      if (!matchesFilter) return recipient;
-
-      return {
-        ...recipient,
-        sendStatus: 'pending' as const,
-        sentAt: null,
-        skipReason: null,
-        notes: '',
-        patientPhoneInput: recipient.mobileDisplay,
-      };
+    const remainingRecipients = session.recipients.filter((recipient) => {
+      if (queueFilter === 'all') return false;
+      if (queueFilter === 'pending') return recipient.sendStatus !== 'pending';
+      return recipient.sendStatus !== 'skipped';
     });
 
-    const nextCurrentIndex = resetRecipients.findIndex((recipient) => recipient.sendStatus === 'pending');
+    if (remainingRecipients.length === 0) {
+      await deleteSession(session.id);
+      setActiveSession(null);
+      setLastAction(null);
+      setShowSessionSummary(false);
+      navigate('/upload');
+      return;
+    }
+
+    const nextCurrentIndex = Math.max(0, remainingRecipients.findIndex((recipient) => recipient.sendStatus === 'pending'));
+    const nextStatus = remainingRecipients.some((recipient) => recipient.sendStatus === 'pending') ? 'in_progress' : 'completed';
 
     setLastAction(null);
     setShowSessionSummary(false);
-    await updateRecipients(resetRecipients, {
-      currentIndex: nextCurrentIndex >= 0 ? nextCurrentIndex : 0,
-      status: 'in_progress',
+    await updateRecipients(remainingRecipients, {
+      currentIndex: nextCurrentIndex,
+      status: nextStatus,
     });
-  }, [session, queueFilter, updateRecipients]);
+  }, [session, queueFilter, updateRecipients, navigate, setActiveSession]);
 
   const finishAndReturnToUpload = useCallback(async () => {
     if (!session) return;
@@ -385,7 +382,7 @@ export default function SendPage() {
     if (queueFilter === 'skipped') return recipient.sendStatus === 'skipped';
     return true;
   });
-  const httpSmsConfigured = Boolean(localStorage.getItem(HTTPSMS_API_KEY_STORAGE) && localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE));
+  const httpSmsConfigured = Boolean(sanitiseApiKey(localStorage.getItem(HTTPSMS_API_KEY_STORAGE) ?? '') && (localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE) ?? '').trim());
   const currentPatientPhone = currentRecipient?.patientPhoneInput || currentRecipient?.mobileDisplay || '';
   const currentPatientPhoneValid = isValidAUMobile(toE164AU(currentPatientPhone));
 
@@ -426,8 +423,8 @@ export default function SendPage() {
   const handleSendSms = async () => {
     if (!currentRecipient || !httpSmsConfigured) return;
 
-    const apiKey = localStorage.getItem(HTTPSMS_API_KEY_STORAGE) ?? '';
-    const from = localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE) ?? '';
+    const apiKey = sanitiseApiKey(localStorage.getItem(HTTPSMS_API_KEY_STORAGE) ?? '');
+    const from = (localStorage.getItem(HTTPSMS_FROM_NUMBER_STORAGE) ?? '').trim();
     const to = toE164AU(currentPatientPhone);
 
     if (!currentPatientPhoneValid) {
@@ -448,7 +445,7 @@ export default function SendPage() {
     });
 
     if (!result.success) {
-      toast({ title: 'SMS not sent', description: (result as { success: false; error: string }).error, variant: 'destructive' });
+      toast({ title: 'SMS not sent', description: result.error, variant: 'destructive' });
       appendSendLog({
         timestamp: new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
         maskedPhone: `••••${to.slice(-4)}`,

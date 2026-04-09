@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Eye, EyeOff, Loader2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, Eye, EyeOff, Loader2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import HttpSmsSetupGuide from '@/components/HttpSmsSetupGuide';
 import { useAppStore } from '@/store/app-store';
 import { normaliseAustralianMobile } from '@/lib/sms-utils';
-import { isValidAUMobile, testConnection, toE164AU } from '@/services/httpsms';
+import { isValidAUMobile, sanitiseApiKey, testConnection, toE164AU } from '@/services/httpsms';
 
 const HTTPSMS_API_KEY_STORAGE = 'httpsms_api_key';
 const HTTPSMS_FROM_NUMBER_STORAGE = 'httpsms_from_number';
@@ -22,6 +22,11 @@ export default function SettingsPage() {
   const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [testStatus, setTestStatus] = useState<{ state: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ state: 'idle', message: '' });
 
+  const trimmedApiKey = sanitiseApiKey(apiKey);
+  const normalisedFromNumber = toE164AU(fromNumberInput);
+  const hasLikelyPhoneApiKey = trimmedApiKey.toLowerCase().includes('phone');
+  const canAttemptTest = Boolean(trimmedApiKey && isValidAUMobile(normalisedFromNumber));
+
   const formattedFromNumber = useMemo(() => {
     if (!fromNumberInput) return '';
     if (fromNumberInput.startsWith('+61')) {
@@ -36,8 +41,8 @@ export default function SettingsPage() {
   };
 
   const persistHttpSmsSettings = (nextApiKey: string, nextFromNumber: string) => {
-    localStorage.setItem(HTTPSMS_API_KEY_STORAGE, nextApiKey);
-    localStorage.setItem(HTTPSMS_FROM_NUMBER_STORAGE, nextFromNumber);
+    localStorage.setItem(HTTPSMS_API_KEY_STORAGE, sanitiseApiKey(nextApiKey));
+    localStorage.setItem(HTTPSMS_FROM_NUMBER_STORAGE, nextFromNumber.trim());
   };
 
   const handleFromNumberBlur = () => {
@@ -55,21 +60,25 @@ export default function SettingsPage() {
   };
 
   const handleTestConnection = async () => {
-    const from = toE164AU(fromNumberInput);
-    if (!apiKey || !isValidAUMobile(from)) {
+    const from = normalisedFromNumber;
+
+    if (!trimmedApiKey || !isValidAUMobile(from)) {
       setTestStatus({ state: 'error', message: 'Enter a valid API key and registered mobile number' });
       return;
     }
 
     setTestStatus({ state: 'loading', message: 'Sending test…' });
-    const result = await testConnection({ apiKey, from });
+    const result = await testConnection({ apiKey: trimmedApiKey, from });
+
     if (result.success) {
       setTestStatus({ state: 'success', message: '✓ Test SMS sent' });
-      persistHttpSmsSettings(apiKey, from);
+      setApiKey(trimmedApiKey);
+      setFromNumberInput(from);
+      persistHttpSmsSettings(trimmedApiKey, from);
       return;
     }
 
-    setTestStatus({ state: 'error', message: `✗ Failed: ${(result as { success: false; error: string }).error}` });
+    setTestStatus({ state: 'error', message: `✗ Failed: ${result.error}` });
   };
 
   const addSuppression = () => {
@@ -109,6 +118,23 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
+          <div className="md:col-span-2 rounded-3xl border border-[#f59e0b]/25 bg-[#f59e0b]/10 p-4 text-sm text-[#fde68a]">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#fbbf24]" />
+              <div className="space-y-2">
+                <p className="font-medium text-[#fef3c7]">Use the account API key, not a phone API key.</p>
+                <p>
+                  The key for this form must come from <span className="font-semibold text-white">httpsms.com/settings</span>. The phone API key page is only for logging the Android app in.
+                </p>
+                <p>
+                  The Android app should be signed into the <span className="font-semibold text-white">same httpSMS account</span> that owns the API key you paste here, and the phone number below must be that same Android handset.
+                </p>
+                {hasLikelyPhoneApiKey ? (
+                  <p className="font-medium text-[#fca5a5]">This key looks like it might be a phone API key. Please copy the account API key from Settings instead.</p>
+                ) : null}
+              </div>
+            </div>
+          </div>
           <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-medium text-foreground">httpSMS API Key</label>
             <div className="flex gap-2">
@@ -122,6 +148,7 @@ export default function SettingsPage() {
                   setApiKey(value);
                   persistHttpSmsSettings(value, fromNumberInput);
                 }}
+                onBlur={() => setApiKey((current) => sanitiseApiKey(current))}
               />
               <Button data-testid="settings-toggle-api-key" variant="outline" size="icon" type="button" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => setShowApiKey((value) => !value)}>
                 {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -143,19 +170,35 @@ export default function SettingsPage() {
               onChange={(e) => setFromNumberInput(e.target.value)}
               onBlur={handleFromNumberBlur}
             />
-            <p className="text-xs text-muted-foreground">The number registered in the httpSMS app on your Android phone</p>
+            <p className="text-xs text-muted-foreground">The number registered in the httpSMS app on your Android phone, signed into the same httpSMS account as the API key above</p>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Connection test</label>
-            <Button data-testid="settings-test-connection" variant="outline" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleTestConnection()} disabled={testStatus.state === 'loading'}>
+            <Button data-testid="settings-test-connection" variant="outline" className="w-full rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleTestConnection()} disabled={testStatus.state === 'loading' || !canAttemptTest}>
               {testStatus.state === 'loading' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Test Connection
             </Button>
+            {!canAttemptTest && (
+              <p className="text-xs text-muted-foreground">Add your account API key and a valid Android mobile number to test the connection.</p>
+            )}
             {testStatus.state !== 'idle' && (
-              <p className={`text-sm ${testStatus.state === 'success' ? 'text-[#11ff99]' : testStatus.state === 'error' ? 'text-[#ff8aa0]' : 'text-muted-foreground'}`}>
-                {testStatus.message}
-              </p>
+              <div className="space-y-3">
+                <p className={`text-sm ${testStatus.state === 'success' ? 'text-[#11ff99]' : testStatus.state === 'error' ? 'text-[#ff8aa0]' : 'text-muted-foreground'}`}>
+                  {testStatus.message}
+                </p>
+                {testStatus.state === 'error' && (
+                  <div className="rounded-2xl border border-[#ff8aa0]/20 bg-[#ff8aa0]/5 p-3 text-xs text-[#ffd5de]">
+                    <p className="font-medium text-white">Common fixes</p>
+                    <ul className="mt-2 ml-4 list-disc space-y-1">
+                      <li>Re-copy the account API key from httpsms.com/settings</li>
+                      <li>Do not use a phone API key from the phone API keys page</li>
+                      <li>Make sure the Android app is signed into the same httpSMS account</li>
+                      <li>Check the phone number here matches the Android handset running httpSMS</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
